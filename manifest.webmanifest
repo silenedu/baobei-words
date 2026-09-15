@@ -1,0 +1,17 @@
+{
+  "name": "宝贝背单词小助手",
+  "short_name": "背单词",
+  "description": "按牛津自然拼读规律背单词：学、读、拼三步走，搭配英英释义配对游戏。",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#EFFBFE",
+  "theme_color": "#EFFBFE",
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
