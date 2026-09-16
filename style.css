@@ -394,6 +394,10 @@ html[data-ui="phone"] .nav{max-width:560px;margin:0 auto}
 .stepper button:active{transform:translateY(2px);box-shadow:none}
 .stepper b{font-family:var(--font-word);font-size:22px;min-width:34px;text-align:center}
 .chips{display:flex;gap:8px;flex-wrap:wrap;flex:none}
+/* 设置页「学习范围」里的分组小标题与说明 */
+.sr-lab{margin:13px 0 7px;font-size:12px;font-weight:900;color:var(--ink3);letter-spacing:.5px;text-transform:uppercase}
+.sr-lab:first-of-type{margin-top:3px}
+.sr-note{margin-top:13px;font-size:12.5px;color:var(--ink3);font-weight:700;line-height:1.55}
 .inp{
   width:100%;padding:12px 14px;border-radius:var(--r);border:2.5px solid var(--line);background:#F9FDFE;
   font-family:inherit;font-size:16px;font-weight:800;color:var(--ink)
