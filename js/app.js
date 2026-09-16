@@ -1176,9 +1176,8 @@
   }
   function matchInfo(id) {
     var it = byId[id];
-    var e = picVisual(it || id);
     var d = (it && it.d) ? it.d : ((window.PWBanks && window.PWBanks.words[id] && window.PWBanks.words[id][0]) || '');
-    return { w: id, e: e, d: d };
+    return { w: id, d: d };
   }
   function matchDef(id) {
     var it = byId[id];
@@ -1240,7 +1239,7 @@
     var left = S.m.left.map(function (w, i) {
       var cls = 'mcard word' + (S.m.selL === i ? ' sel' : '') + (w._ok ? ' ok' : '') + (S.m.badL === i ? ' bad' : '');
       return '<button class="' + cls + '" data-act="pickL" data-i="' + i + '"' + (w._ok ? ' disabled' : '') + '>' +
-        (w.e ? '<span class="me">' + w.e + '</span>' : '') + '<span class="mw">' + esc(disp2(w.w)) + '</span></button>';
+        '<span class="mw">' + esc(disp2(w.w)) + '</span></button>';
     }).join('');
     var right = S.m.right.map(function (w, i) {
       var cls = 'mcard def' + (S.m.selR === i ? ' sel' : '') + (w._ok ? ' ok' : '') + (S.m.badR === i ? ' bad' : '');
