@@ -11,9 +11,11 @@
 
   /* ============ 存储 ============ */
   var K = { cfg: 'pw_cfg_v1', prog: 'pw_prog_v1', plan: 'pw_plan_v1', hist: 'pw_hist_v1', wrong: 'pw_wrong_v1' };
+  var BANK_IDS = ['c1', 'c2', 'c3', 'ket', 'pet'];
   var DEFAULT_CFG = {
     name: 'Buddy', daily: 8, mode: 'en', voice: '', rate: 0.85, ex: true,
-    levels: [2, 3, 4, 5], alpha: true, wordfont: 'play', sound: true, spellMode: 'auto'
+    levels: [2, 3, 4, 5], banks: BANK_IDS.slice(),
+    alpha: true, wordfont: 'play', sound: true, spellMode: 'auto'
   };
   function read(key, def) {
     try { var v = localStorage.getItem(key); return v ? JSON.parse(v) : def; } catch (e) { return def; }
@@ -35,6 +37,24 @@
     eff: 'phone'
   };
   if (!S.cfg.levels || !S.cfg.levels.length) S.cfg.levels = [2, 3, 4, 5];
+  if (!S.cfg.banks) S.cfg.banks = BANK_IDS.slice();
+  /* 单词 → 所属剑桥词库列表（可能同时属于多个库，如 c1⊂c2⊂c3） */
+  var BANK_OF = {}, BANKS_OF = {};
+  (function () {
+    var BB = window.PWBanks || {};
+    BANK_IDS.forEach(function (b) {
+      (BB[b] || []).forEach(function (w) {
+        (BANKS_OF[w] = BANKS_OF[w] || []).push(b);
+      });
+    });
+    Object.keys(BANKS_OF).forEach(function (w) { BANK_OF[w] = BANKS_OF[w][0]; });
+  })();
+  /* 这个词归给「第一个已开启」的词库，避免跨库重复 */
+  function ownerBank(id) {
+    var l = BANKS_OF[id] || [];
+    for (var i = 0; i < l.length; i++) if (S.cfg.banks.indexOf(l[i]) >= 0) return l[i];
+    return null;
+  }
 
   /* ============ 日期工具 ============ */
   function todayStr(d) {
@@ -95,12 +115,21 @@
       '<path d="M48 85 q7 4 14 0" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round"/>' +
       '</svg>'
   };
-  /* 取一个词的“图片”：优先自定义插画，否则 emoji（入参可为 word 对象或 id 字符串） */
+  /* 取一个词的“图片”：优先自定义插画 → 自带 emoji → 剑桥词库映射的 emoji（入参可为 word 对象或 id） */
   function picVisual(w) {
-    var key = (typeof w === 'string') ? w : (w && w.w);
+    var key = (typeof w === 'string') ? w : ((w && w.w) || '');
     if (key && PIC_ART[key]) return PIC_ART[key];
-    if (w && typeof w === 'object') return w.e || '⭐';
-    return '⭐';
+    var e = (w && typeof w === 'object' && w.e) ? w.e : '';
+    if (!e && key && window.PWBanks && window.PWBanks.words[key]) e = window.PWBanks.words[key][2] || '';
+    return e || (w && typeof w === 'object' ? '⭐' : '🔤');
+  }
+  /* 这个词有没有“像样的图片”（没有就别进拼写游戏，免得出现 ABC 占位） */
+  function hasPic(id) {
+    if (PIC_ART[id]) return true;
+    var it = byId[id];
+    if (it && it.e) return true;
+    var b = window.PWBanks && window.PWBanks.words[id];
+    return !!(b && b[2]);
   }
   function picCard(w, extraCls) {
     var a = accent(w);
@@ -282,18 +311,59 @@
   }
   function hideCelebrate() { $('#celebrate').hidden = true; }
 
-  /* ============ 计划 / 进度 ============ */
+  /* 计划 / 进度 */
   function dueList(dateStr) {
     var t = dateStr || todayStr();
-    return WORDS.filter(function (w) {
-      var p = S.prog[w.w];
-      return !!(p && p.due && p.due <= t && S.cfg.levels.indexOf(w.L) >= 0);
-    }).sort(function (a, b) { return S.prog[a.w].due < S.prog[b.w].due ? -1 : S.prog[a.w].due > S.prog[b.w].due ? 1 : 0; });
+    var out = [];
+    Object.keys(S.prog).forEach(function (id) {
+      var p = S.prog[id];
+      if (!p || !p.due || p.due > t) return;
+      if (!inRange(id)) return;
+      var w = learnWord(id);
+      if (w) out.push(w);
+    });
+    return out.sort(function (a, b) {
+      var x = S.prog[a.w].due, y = S.prog[b.w].due;
+      return x < y ? -1 : x > y ? 1 : 0;
+    });
+  }
+  /* 还没学过的词池：先自拼课内顺序，再按剑桥词库顺序（只收有图、能拼的词） */
+  function planPool() {
+    var seen = {}, out = [];
+    WORDS.forEach(function (w) {
+      if (seen[w.w] || S.prog[w.w]) return;
+      if (S.cfg.levels.indexOf(w.L) < 0) return;
+      if (!hasPic(w.w)) return;
+      seen[w.w] = 1; out.push(w.w);
+    });
+    BANK_IDS.forEach(function (b) {
+      if (S.cfg.banks.indexOf(b) < 0) return;
+      ((window.PWBanks && window.PWBanks[b]) || []).forEach(function (id) {
+        if (seen[id] || S.prog[id]) return;
+        if (ownerBank(id) !== b) return;
+        if (!hasPic(id) || !learnWord(id)) return;
+        seen[id] = 1; out.push(id);
+      });
+    });
+    return out;
+  }
+  /* 某个剑桥词库里「能学」的词数（有图 + 能拼），缓存一次 */
+  var BANK_LEARNABLE = null;
+  function bankLearnable(b) {
+    if (!BANK_LEARNABLE) {
+      BANK_LEARNABLE = {};
+      BANK_IDS.forEach(function (bk) {
+        BANK_LEARNABLE[bk] = ((window.PWBanks && window.PWBanks[bk]) || []).filter(function (id) {
+          return hasPic(id) && learnWord(id);
+        }).length;
+      });
+    }
+    return BANK_LEARNABLE[b] || 0;
   }
   function ensurePlan() {
     var t = todayStr();
     if (S.plan && S.plan.date === t) return S.plan;
-    var pool = WORDS.filter(function (w) { return !S.prog[w.w] && S.cfg.levels.indexOf(w.L) >= 0; });
+    var pool = planPool();
     var due = dueList(t);
     var N = S.cfg.daily;
     var reviewCount = Math.min(due.length, Math.max(0, N - 3));
@@ -305,7 +375,7 @@
     }
     S.plan = {
       date: t,
-      newIds: news.map(function (w) { return w.w; }),
+      newIds: news.slice(),
       reviewIds: reviews.map(function (w) { return w.w; }),
       doneNew: [], doneReview: []
     };
@@ -517,13 +587,11 @@
     return { ids: [], label: '' };
   }
   function wordObjFor(id) {
-    var w = byId[id];
+    var w = learnWord(id);
     if (w) return w;
     var b = (window.PWBanks && window.PWBanks.words) || {};
     var info = b[id];
-    if (info) {
-      return { w: id, d: info[0], ps: info[1] || '', e: '', p: '', x: '' };
-    }
+    if (info) return { w: id, d: info[0], ps: info[1] || '', e: info[2] || '', p: '', x: '', chunks: [], h: [] };
     return null;
   }
   function openList(kind, date) {
@@ -575,7 +643,7 @@
   }
   function curWord() {
     var it = curItem();
-    return it ? byId[it.id] : null;
+    return it ? learnWord(it.id) : null;
   }
   function renderLearn() {
     puzCtx = 'learn';
@@ -584,7 +652,7 @@
     var planTotal = plan.newIds.length + plan.reviewIds.length;
     if (!S.lrn.q.length) {
       if (!planTotal && !Object.keys(S.prog).length) {
-        v.innerHTML = '<div class="card"><div class="empty"><span class="big">📚</span>No words to learn yet<br>Pick some phonics levels in Settings</div></div>';
+        v.innerHTML = '<div class="card"><div class="empty"><span class="big">📚</span>No words to learn yet<br>Pick a study range in Settings</div></div>';
         return;
       }
       var p = ensurePlan();
@@ -597,7 +665,8 @@
     }
     var it = curItem();
     if (!it) { v.innerHTML = doneHTML(); return; }
-    var w = byId[it.id];
+    var w = learnWord(it.id);
+    if (!w) { S.lrn.i++; renderLearn(); return; }
     var doneCount = S.lrn.q.length - S.lrn.i;
     var head = '<div class="learn-head"><div><div class="lh-t">' + (it.isNew ? '🌱 New word' : '🔁 Review') + '</div>' +
       '<div class="lh-s">' + doneCount + ' more to finish today</div></div>' +
@@ -802,7 +871,6 @@
     }, 420);
   }
   /* --- 拼写引擎（今日学习·第三步 与 拼写游戏 共用） --- */
-  var CHUNK_POOL = ['ay', 'ai', 'ee', 'ea', 'oa', 'ow', 'oo', 'ou', 'oi', 'oy', 'ar', 'or', 'er', 'ir', 'ur', 'sh', 'ch', 'th', 'igh', 'ue', 'ew', 'oo', 'oo'];
   var LETTER_POOL = 'bcdfghjklmnprstvwz'.split('');
   var puzCtx = 'learn';                       // 当前拼图属于哪个视图：'learn' | 'spell'
   function getPz() { return puzCtx === 'spell' ? S.sp.pz : S.lrn.pz; }
@@ -836,31 +904,68 @@
     }
     return out;
   }
-  /* 把任意词库里的单词转成可拼写的对象（自拼词库直接返回；剑桥全量词库现场切字母块） */
-  function spellWord(id) {
-    var w = byId[id];
-    if (w && /^[a-z]+$/i.test(w.w)) return w;
-    if (!/^[a-z]+$/i.test(String(id || ''))) return null;
+  /* 剑桥词库的词现场构造可学习对象（切字母块、定拼写模式、取释义/词性/图片） */
+  function bankWord(id) {
+    var info = (window.PWBanks && window.PWBanks.words[id]) || null;
+    if (!info) return null;
     var letters = String(id).toLowerCase();
     var chunks = chunkWord(letters);
     var hasTeam = chunks.some(function (c) { return c.length > 1; });
     var h = [];
     for (var i = 0; i < letters.length; i++) if (i === 0 || 'aeiou'.indexOf(letters.charAt(i)) >= 0) h.push(i);
     if (h.length >= letters.length) h = [0];
+    var pat = chunks.length <= 5 ? chunks.join('·') : chunks.length + ' blocks';
+    var tip = chunks.length <= 6
+      ? 'Blend the letter blocks: ' + chunks.join(' - ')
+      : 'Say it slowly, one block at a time';
     return {
-      i: 0, w: letters, cn: '', e: (byId[id] && byId[id].e) || '🔤', L: 0, p: '', pTip: '',
-      chunks: chunks, hc: [], h: h, pat: '', mode: hasTeam ? 'combine' : 'fill', ps: '',
-      d: matchDef(id) || '', x: '', z: '', banks: []
+      i: 0, w: letters, cn: '', e: info[2] || '⭐', L: BANK_OF[id] || 'c1',
+      p: pat, pTip: tip,
+      chunks: chunks, hc: [], h: h, pat: '', mode: hasTeam ? 'combine' : 'fill',
+      ps: info[1] || '', d: info[0] || '', x: '', z: '', banks: []
     };
   }
+  /* 学习 / 拼写通用取词：自拼词库直接返回，剑桥词库现场构造，取不到返回 null */
+  function learnWord(id) {
+    var w = byId[id];
+    if (w) return /^[a-z]+$/i.test(w.w) ? w : null;
+    if (!/^[a-z]+$/i.test(String(id || ''))) return null;
+    return bankWord(id);
+  }
+  function spellWord(id) { return learnWord(id); }
+  /* 这个词是否在「学习范围」内（自拼词库看等级，剑桥词库看词库开关） */
+  function inRange(id) {
+    var w = byId[id];
+    if (w) return S.cfg.levels.indexOf(w.L) >= 0;
+    var b = BANK_OF[id];
+    return !!b && S.cfg.banks.indexOf(b) >= 0;
+  }
+  /* 调试/自检入口（headless 验证用） */
+  window.__PW = {
+    cfg: function () { return S.cfg; },
+    prog: function () { return S.prog; },
+    bankOf: function (id) { return BANK_OF[id]; },
+    learnWord: learnWord, inRange: inRange, planPool: planPool,
+    dueList: dueList, bankLearnable: bankLearnable,
+    stats: function () {
+      var pool = planPool();
+      return {
+        pool: pool.length,
+        first10: pool.slice(0, 10),
+        bySource: pool.reduce(function (a, id) {
+          var k = byId[id] ? ('L' + byId[id].L) : (BANK_OF[id] || '?');
+          a[k] = (a[k] || 0) + 1; return a;
+        }, {})
+      };
+    }
+  };
   function buildPuzzle(w) {
     var mode = resolveMode(w);
     var slots = [], tiles = [], isChunk = (mode === 'combine');
     if (isChunk) {
       slots = w.chunks.map(function (c) { return { ans: c, given: false, filled: null, isChunk: true }; });
+      /* 组合模式不给干扰块：只放这个单词自己的几个部分，考的是顺序 */
       tiles = w.chunks.slice();
-      var extra = shuffle(CHUNK_POOL.filter(function (c) { return w.chunks.indexOf(c) < 0; })).slice(0, 3);
-      tiles = tiles.concat(extra);
     } else {
       for (var i = 0; i < w.w.length; i++) {
         var given = w.h.indexOf(i) >= 0;
@@ -1016,7 +1121,8 @@
   function finishWord(mistakes) {
     var it = curItem();
     if (!it) return;
-    var w = byId[it.id];
+    var w = learnWord(it.id);
+    if (!w) { S.lrn.i++; S.lrn.step = 0; renderLearn(); return; }
     var pz = S.lrn.pz;
     var bad = mistakes || (pz && pz.tries >= 2);
     if (bad) addWrong(w);
@@ -1058,7 +1164,7 @@
   }
   function matchInfo(id) {
     var it = byId[id];
-    var e = it ? picVisual(it) : '';
+    var e = picVisual(it || id);
     var d = (it && it.d) ? it.d : ((window.PWBanks && window.PWBanks.words[id] && window.PWBanks.words[id][0]) || '');
     return { w: id, e: e, d: d };
   }
@@ -1136,7 +1242,7 @@
 
   /* ============ 拼写游戏 ============ */
   function spellPool() {
-    return listForBank(S.m.bank).filter(function (id) { return !!spellWord(id); });
+    return listForBank(S.m.bank).filter(function (id) { return !!spellWord(id) && hasPic(id); });
   }
   function startSpellRound() {
     var pool = spellPool();
@@ -1262,7 +1368,7 @@
     if (it) return wordCardHTML(it, { badge: { cls: 'rev', text: 'Wrong ' + (e.n || 1) + '×' } });
     var d = matchDef(id);
     return '<div class="wcard">' +
-      '<div class="wc-pic" style="--a:#EAF5F8;--b:#DCEEF4">🔤</div>' +
+      '<div class="wc-pic" style="--a:#EAF5F8;--b:#DCEEF4">' + picVisual(id) + '</div>' +
       '<div class="wc-main">' +
         '<div class="wc-word"><span class="ltr">' + esc(disp2(id)) + '</span>' +
           '<button class="spk-line" data-act="speak" data-text="' + esc(id) + '">🔊</button></div>' +
@@ -1297,8 +1403,14 @@
     }).join('');
     var lvlChips = [2, 3, 4, 5].map(function (L) {
       var on = c.levels.indexOf(L) >= 0;
+      var nm = S.eff === 'pad' ? LEVEL_META[L].name : ('L' + L + ' · ' + LEVEL_META[L].short);
       return '<button class="chip' + (on ? ' on' : '') + '" data-act="toggleLevel" data-v="' + L + '">' +
-        LEVEL_META[L].name + '</button>';
+        nm + '</button>';
+    }).join('');
+    var bankChips = BANK_IDS.map(function (b) {
+      var meta = BANK_META.filter(function (x) { return x.id === b; })[0] || { name: b, icon: '' };
+      return '<button class="chip' + (c.banks.indexOf(b) >= 0 ? ' on' : '') + '" data-act="toggleBank" data-v="' + b + '">' +
+        meta.icon + ' ' + meta.name + ' <span style="opacity:.65">' + bankLearnable(b) + '</span></button>';
     }).join('');
     var bankStat = BANK_META.filter(function (b) { return b.id !== 'today' && b.id !== 'wrong'; }).map(function (b) {
       var cnt = (window.PWBanks && window.PWBanks[b.id]) ? window.PWBanks[b.id].length : (D.bankWords[b.id] || []).length;
@@ -1340,8 +1452,11 @@
       '</div>' +
 
       '<div class="card"><div class="sec-title" style="margin-top:0"><span class="em">🎯</span>Study range</div>' +
-        '<div style="font-size:13px;color:var(--ink3);font-weight:700;margin-bottom:10px">Oxford Phonics World Levels 2-5, all on by default</div>' +
-        '<div class="chips">' + lvlChips + '</div></div>' +
+        '<div class="sr-lab">Oxford Phonics World</div>' +
+        '<div class="chips">' + lvlChips + '</div>' +
+        '<div class="sr-lab">Cambridge word banks</div>' +
+        '<div class="chips">' + bankChips + '</div>' +
+        '<div class="sr-note">Numbers show how many words in each bank have a picture and can be studied. Daily new words come in this order: Phonics → Starters → Movers → Flyers → KET → PET.</div></div>' +
 
       '<div class="card"><div class="sec-title" style="margin-top:0"><span class="em">📚</span>Word bank stats</div>' +
         '<div class="stat-grid"><div><div class="sn">' + WORDS.length + '</div><div class="sl2">Total words</div></div>' + bankStat + '</div>' +
@@ -1480,9 +1595,20 @@
     if (a === 'toggleLevel') {
       var L2 = +t.getAttribute('data-v');
       var ix = S.cfg.levels.indexOf(L2);
-      if (ix >= 0) { if (S.cfg.levels.length <= 1) { toast('Keep at least one level'); return; } S.cfg.levels.splice(ix, 1); }
+      if (ix >= 0) { if (S.cfg.levels.length + S.cfg.banks.length <= 1) { toast('Keep at least one range on'); return; } S.cfg.levels.splice(ix, 1); }
       else S.cfg.levels.push(L2);
       S.cfg.levels.sort();
+      S.plan = null;
+      write(K.cfg, S.cfg);
+      renderSet();
+      return;
+    }
+    if (a === 'toggleBank') {
+      var bk = t.getAttribute('data-v');
+      var bx = S.cfg.banks.indexOf(bk);
+      if (bx >= 0) { if (S.cfg.levels.length + S.cfg.banks.length <= 1) { toast('Keep at least one range on'); return; } S.cfg.banks.splice(bx, 1); }
+      else S.cfg.banks.push(bk);
+      S.cfg.banks.sort(function (x, y) { return BANK_IDS.indexOf(x) - BANK_IDS.indexOf(y); });
       S.plan = null;
       write(K.cfg, S.cfg);
       renderSet();
