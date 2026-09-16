@@ -13,7 +13,7 @@
   var K = { cfg: 'pw_cfg_v1', prog: 'pw_prog_v1', plan: 'pw_plan_v1', hist: 'pw_hist_v1', wrong: 'pw_wrong_v1' };
   var DEFAULT_CFG = {
     name: 'Buddy', daily: 8, mode: 'en', voice: '', rate: 0.85, ex: true,
-    levels: [2, 3, 4, 5], alpha: true, ui: 'auto', wordfont: 'play', sound: true
+    levels: [2, 3, 4, 5], alpha: true, wordfont: 'play', sound: true
   };
   function read(key, def) {
     try { var v = localStorage.getItem(key); return v ? JSON.parse(v) : def; } catch (e) { return def; }
@@ -114,52 +114,95 @@
   var voices = [], chosen = null;
   var SWEET = ['samantha', 'ava', 'allison', 'nicky', 'karen', 'serena', 'moira', 'tessa',
     'google us english', 'aria', 'jenny', 'michelle', 'zira', 'siri'];
-  function loadVoices() {
-    if (!('speechSynthesis' in window)) return;
-    voices = speechSynthesis.getVoices().filter(function (v) { return /^en/i.test(v.lang); });
-    if (!voices.length) return;
-    chosen = null;
-    if (S.cfg.voice) {
-      for (var i = 0; i < voices.length; i++) if (voices[i].name === S.cfg.voice) chosen = voices[i];
-    }
-    if (!chosen) {
-      for (var k = 0; k < SWEET.length && !chosen; k++) {
-        for (var j = 0; j < voices.length; j++) {
-          var nm = voices[j].name.toLowerCase();
-          var lg = (voices[j].lang || '').toLowerCase();
-          if (nm.indexOf(SWEET[k]) >= 0 && lg.indexOf('en-us') >= 0) { chosen = voices[j]; break; }
-        }
+  // 一些平台 (Huawei/Android) 不暴露 SpeechSynthesis, 但 navigator 有时仍会存在空函数；做兜底
+  function ttsSupported() {
+    if (typeof window === 'undefined') return false;
+    if (!('speechSynthesis' in window)) return false;
+    try {
+      var u = new SpeechSynthesisUtterance(' ');
+      return !!(window.speechSynthesis && (window.speechSynthesis.speak || window.speechSynthesis.getVoices));
+    } catch (e) { return false; }
+  }
+  function resolveVoice(name) {
+    // 按名字 + 多种匹配策略, 跨平台更稳
+    if (!voices.length) return null;
+    var n = (name || '').toLowerCase();
+    if (n) {
+      for (var i = 0; i < voices.length; i++) {
+        if (voices[i].name === name) return voices[i];
+      }
+      for (var j = 0; j < voices.length; j++) {
+        if (voices[j].name.toLowerCase().indexOf(n) >= 0) return voices[j];
       }
     }
-    if (!chosen) {
-      for (var m = 0; m < voices.length; m++) if (/en[-_]US/i.test(voices[m].lang)) { chosen = voices[m]; break; }
+    // 先挑"甜"音色, 都失败就 en-US, 再失败就任意英文, 最后任意
+    for (var k = 0; k < SWEET.length; k++) {
+      for (var p = 0; p < voices.length; p++) {
+        var nm = voices[p].name.toLowerCase();
+        var lg = (voices[p].lang || '').toLowerCase();
+        if (nm.indexOf(SWEET[k]) >= 0 && lg.indexOf('en') >= 0) return voices[p];
+      }
     }
-    if (!chosen) chosen = voices[0];
+    for (var q = 0; q < voices.length; q++) {
+      if ((voices[q].lang || '').toLowerCase().indexOf('en-us') >= 0) return voices[q];
+    }
+    for (var r = 0; r < voices.length; r++) {
+      if ((voices[r].lang || '').toLowerCase().indexOf('en') >= 0) return voices[r];
+    }
+    return voices[0];
+  }
+  function loadVoices() {
+    if (!ttsSupported()) return;
+    try {
+      voices = (window.speechSynthesis.getVoices() || []).filter(function (v) {
+        return v && /^en/i.test(v.lang || '');
+      });
+    } catch (e) { voices = []; }
+    if (!voices.length) return;
+    chosen = resolveVoice(S.cfg.voice);
     if (S.tab === 'set') {
       var sel = document.getElementById('voiceSel');
       if (sel && sel.options.length < 2 && voices.length) renderSet();
     }
   }
+  // Safari / iOS / 某些 Android 浏览器 voiceschanged 不可靠, 多触发几次 + 兜底轮询
+  function bindVoices() {
+    if (!ttsSupported()) return;
+    try { window.speechSynthesis.onvoiceschanged = loadVoices; } catch (e) {}
+    setTimeout(loadVoices, 50);
+    setTimeout(loadVoices, 250);
+    setTimeout(loadVoices, 800);
+    setTimeout(loadVoices, 2000);
+  }
   function speak(text, rate) {
-    if (!('speechSynthesis' in window)) { toast('Reading is not supported in this browser'); return; }
+    if (!ttsSupported()) {
+      toast('This browser can\'t read aloud — try Chrome or Safari');
+      return;
+    }
     try {
-      speechSynthesis.cancel();
-      var u = new SpeechSynthesisUtterance(text);
+      try { window.speechSynthesis.cancel(); } catch (e) {}
+      var u = new SpeechSynthesisUtterance(String(text || ''));
       u.lang = 'en-US';
-      if (chosen) u.voice = chosen;
-      u.rate = rate || S.cfg.rate;
-      u.pitch = 1.2;   // 甜一点
+      var v = chosen || resolveVoice(S.cfg.voice);
+      if (v) { try { u.voice = v; if (v.lang) u.lang = v.lang; } catch (e) {} }
+      u.rate = rate || S.cfg.rate || 1;
       u.volume = 1;
+      // pitch 在部分平台 (Safari 桌面 / 一些 Android) 不支持或行为怪异, 失败就放弃, 不报错
+      try { u.pitch = 1.2; } catch (e) {}
       var bigs = document.querySelectorAll('.word-big');
       u.onstart = function () { for (var i = 0; i < bigs.length; i++) bigs[i].classList.add('speaking'); };
-      u.onend = u.onerror = function () { for (var i = 0; i < bigs.length; i++) bigs[i].classList.remove('speaking'); };
-      speechSynthesis.speak(u);
+      var done = function () {
+        for (var i = 0; i < bigs.length; i++) bigs[i].classList.remove('speaking');
+      };
+      u.onend = done; u.onerror = done;
+      try {
+        window.speechSynthesis.speak(u);
+      } catch (e) {}
+      // 兜底: 某些浏览器 (老 Safari) speak 后没触发 onend, 5 秒后强制清状态
+      setTimeout(done, 5000);
     } catch (e) {}
   }
-  if ('speechSynthesis' in window) {
-    loadVoices();
-    speechSynthesis.onvoiceschanged = loadVoices;
-  }
+  bindVoices();
 
   /* 音效（WebAudio，无需素材） */
   var AC = null;
@@ -309,13 +352,10 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
   function applyUI() {
-    var want = S.cfg.ui || 'auto';
-    var eff = want === 'auto' ? (window.innerWidth >= 900 ? 'pad' : 'phone') : want;
+    var eff = window.innerWidth >= 900 ? 'pad' : 'phone';
     S.eff = eff;
     document.documentElement.setAttribute('data-ui', eff);
     document.documentElement.setAttribute('data-wordfont', S.cfg.wordfont === 'plain' ? 'plain' : 'play');
-    var sw = document.querySelectorAll('#uiSwitch button');
-    for (var i = 0; i < sw.length; i++) sw[i].classList.toggle('on', sw[i].getAttribute('data-ui') === want);
     $('#babyName').textContent = S.cfg.name || 'Buddy';
   }
   function paintTop() {
@@ -358,17 +398,20 @@
       '<button class="btn hbtn" data-act="' + (isToday ? 'goLearn' : 'backToday') + '">' +
       (isToday ? (planDone >= planTotal && planTotal ? 'Play a match 🧩' : 'Start learning 📚') : 'Back to today') + '</button></div></div>';
 
-    var tiles = '<div class="tiles">' +
-      '<button class="tile-btn new" data-act="openList" data-kind="new" data-date="' + date + '">' +
-        '<span class="th">🌱</span><div class="tn">' + doneN + '</div><div class="tl">New words learned</div></button>' +
-      '<button class="tile-btn rev" data-act="openList" data-kind="review" data-date="' + date + '">' +
-        '<span class="th">🔁</span><div class="tn">' + doneR + '</div><div class="tl">Words reviewed</div></button>' +
+    var tiles = '<div class="dash-tiles">' +
+      '<button class="tile-btn new' + (doneN ? '' : ' off') + '" data-act="openList" data-kind="new" data-date="' + date + '">' +
+        '<span class="th">🌱</span><div class="tn">' + doneN + '</div><div class="tl">New today</div></button>' +
+      '<button class="tile-btn rev' + (doneR ? '' : ' off') + '" data-act="openList" data-kind="review" data-date="' + date + '">' +
+        '<span class="th">🔁</span><div class="tn">' + doneR + '</div><div class="tl">Reviewed today</div></button>' +
       '</div>';
 
     var mini = '<div class="mini">' +
-      '<div><div class="mn">' + learned + '</div><div class="ml">Learned</div></div>' +
-      '<div><div class="mn">' + nowDue + '</div><div class="ml">To review</div></div>' +
-      '<div><div class="mn">' + wrongN + '</div><div class="ml">Mistakes</div></div>' +
+      '<button class="mini-btn' + (learned ? '' : ' off') + '" data-act="openList" data-kind="learned">' +
+        '<div class="mn">' + learned + '</div><div class="ml">Learned</div></button>' +
+      '<button class="mini-btn' + (nowDue ? '' : ' off') + '" data-act="openList" data-kind="due">' +
+        '<div class="mn">' + nowDue + '</div><div class="ml">To review</div></button>' +
+      '<button class="mini-btn' + (wrongN ? '' : ' off') + '" data-act="openList" data-kind="wrong">' +
+        '<div class="mn">' + wrongN + '</div><div class="ml">Mistakes</div></button>' +
       '</div>';
 
     /* 近 7 天柱状图 */
@@ -411,27 +454,74 @@
       '<div class="cal-grid">' + wd + cells + '</div>' +
       '<div style="font-size:12px;color:var(--ink3);font-weight:800;text-align:center;margin-top:8px">Tap a date to see its words · green dot = studied</div>';
 
-    var left = hero + tiles + mini +
-      '<div class="sec-title"><span class="em">💡</span>Mistakes to review</div>' +
-      (wrongN ? '<div class="card" style="display:flex;align-items:center;gap:12px">' +
+    var mistakesCard = (wrongN ? '<div class="card" style="display:flex;align-items:center;gap:12px">' +
         '<div style="font-size:34px">💡</div><div style="flex:1"><b>' + wrongN + ' words need another look</b>' +
         '<div style="font-size:12px;color:var(--ink3);font-weight:700">Words missed in the match game are saved here</div></div>' +
         '<button class="btn sm soft" data-act="goWrong">Review</button></div>'
         : '<div class="card"><div class="empty"><span class="big">🎉</span>No mistakes yet — great job!</div></div>');
-    var right = '<div class="sec-title"><span class="em">📈</span>Last 7 days</div><div class="card">' + bars + '</div>' +
-      '<div class="sec-title"><span class="em">🗓</span>Study calendar</div><div class="card">' + cal + '</div>';
-    $('#v-dash').innerHTML = '<div class="pane2"><div>' + left + '</div><div>' + right + '</div></div>';
+    var barsPanel = '<div class="sec-title"><span class="em">📈</span>Last 7 days</div><div class="card">' + bars + '</div>';
+    var calPanel = '<div class="sec-title"><span class="em">🗓</span>Study calendar</div><div class="card">' + cal + '</div>';
+    $('#v-dash').innerHTML =
+      '<div class="p-hero">' + hero + '</div>' +
+      '<div class="p-bars">' + barsPanel + '</div>' +
+      '<div class="p-tiles">' + tiles + '</div>' +
+      '<div class="p-cal">' + calPanel + '</div>' +
+      '<div class="p-mini">' + mini + '</div>' +
+      '<div class="p-mistakes">' + mistakesCard + '</div>';
   }
 
   /* ============ 单词列表弹层 ============ */
+  function listWords(kind, date) {
+    date = date || todayStr();
+    if (kind === 'new' || kind === 'review') {
+      var rec = S.hist[date] || { new: [], review: [] };
+      var ids = (kind === 'new' ? rec.new : rec.review) || [];
+      return { ids: ids, label: 'New words' };
+    }
+    if (kind === 'review-today' || kind === 'due') {
+      var dueIds = dueList(todayStr());
+      return { ids: dueIds, label: 'Words to review' };
+    }
+    if (kind === 'learned' || kind === 'total') {
+      return { ids: Object.keys(S.prog), label: 'All learned words' };
+    }
+    if (kind === 'wrong' || kind === 'mistakes') {
+      return { ids: Object.keys(S.wrong), label: 'Mistake box' };
+    }
+    return { ids: [], label: '' };
+  }
+  function wordObjFor(id) {
+    var w = byId[id];
+    if (w) return w;
+    var b = (window.PWBanks && window.PWBanks.words) || {};
+    var info = b[id];
+    if (info) {
+      return { w: id, d: info[0], ps: info[1] || '', e: '', p: '', x: '' };
+    }
+    return null;
+  }
   function openList(kind, date) {
-    var rec = S.hist[date] || { new: [], review: [] };
-    var ids = (kind === 'new' ? rec.new : rec.review) || [];
-    var title = date.slice(5) + ' · ' + (kind === 'new' ? 'New' : 'Reviewed') + ' words (' + ids.length + ')';
-    if (!ids.length) { return openModal(title, '<div class="empty"><span class="big">🍃</span>No ' + (kind === 'new' ? 'new' : 'reviewed') + ' words yet</div>'); }
+    var L = listWords(kind, date);
+    var ids = L.ids, label = L.label;
+    var t = date || todayStr();
+    var title;
+    if (kind === 'new' || kind === 'review') {
+      title = (kind === 'new' ? '🌱 New' : '🔁 Reviewed') + ' · ' + t.slice(5) + ' (' + ids.length + ')';
+    } else {
+      title = label + ' (' + ids.length + ')';
+    }
+    if (!ids.length) {
+      return openModal(title, '<div class="empty"><span class="big">🍃</span>Nothing here yet</div>');
+    }
     var html = '<div class="wlist">' + ids.map(function (id) {
-      var w = byId[id];
-      return w ? wordCardHTML(w, { badge: { cls: kind === 'new' ? 'news' : 'rev', text: kind === 'new' ? 'New' : 'Review' } }) : '';
+      var w = wordObjFor(id);
+      if (!w) return '';
+      var badge = null;
+      if (kind === 'new') badge = { cls: 'news', text: 'New' };
+      else if (kind === 'review') badge = { cls: 'rev', text: 'Review' };
+      else if (kind === 'wrong' || kind === 'mistakes') badge = { cls: 'bad', text: 'Mistake' };
+      else if (kind === 'due' || kind === 'review-today') badge = { cls: 'rev', text: 'Due' };
+      return wordCardHTML(w, { badge: badge });
     }).join('') + '</div>';
     openModal(title, html);
   }
@@ -1070,10 +1160,6 @@
         '<div class="set-row"><div class="sl"><b>Letter font</b><span>Playful handwriting suits early learning</span></div>' +
         '<div class="seg"><button class="' + (c.wordfont !== 'plain' ? 'on' : '') + '" data-act="wordfont" data-v="play">Playful</button>' +
         '<button class="' + (c.wordfont === 'plain' ? 'on' : '') + '" data-act="wordfont" data-v="plain">Plain</button></div></div>' +
-        '<div class="set-row"><div class="sl"><b>Preview mode</b><span>Phone / Pad (nav on the left for Pad)</span></div>' +
-        '<div class="seg"><button class="' + (c.ui === 'auto' ? 'on' : '') + '" data-act="uiMode" data-v="auto">Auto</button>' +
-        '<button class="' + (c.ui === 'phone' ? 'on' : '') + '" data-act="uiMode" data-v="phone">Phone</button>' +
-        '<button class="' + (c.ui === 'pad' ? 'on' : '') + '" data-act="uiMode" data-v="pad">Pad</button></div></div>' +
       '</div>' +
 
       '<div class="card"><div class="sec-title" style="margin-top:0"><span class="em">🔊</span>Pronunciation</div>' +
@@ -1147,7 +1233,14 @@
       return;
     }
     if (a === 'nextWord') { finishWord(false); return; }
-    if (a === 'mic') { if (S.lrn.recording) finishRec(); else startRec(); return; }
+    if (a === 'mic') {
+      if (S.lrn.recording) { finishRec(); return; }
+      // "Read again" 路径: 重置评分/识别结果, 启动录音, 并切回大话筒视图
+      S.lrn.score = null; S.lrn.srdone = false; S.lrn.transcript = '';
+      startRec();
+      renderLearn();
+      return;
+    }
     if (a === 'replay') {
       if (S.lrn.lastRecordURL) { var au = new Audio(S.lrn.lastRecordURL); au.play().catch(function () { toast('Could not play it — try recording again'); }); }
       else toast('No recording yet');
@@ -1155,7 +1248,7 @@
     }
     if (a === 'playWord') { var w1 = curWord(); if (w1) speak(w1.w); return; }
     if (a === 'selfOK') { S.lrn.srdone = true; S.lrn.score = 90; sOk(); renderLearn(); return; }
-    if (a === 'selfAgain') { S.lrn.srdone = false; startRec(); return; }
+    if (a === 'selfAgain') { S.lrn.score = null; S.lrn.srdone = false; startRec(); renderLearn(); return; }
     if (a === 'tile') { tapTile(+t.getAttribute('data-i')); return; }
     if (a === 'slot') { tapSlot(+t.getAttribute('data-i')); return; }
     if (a === 'hint') { hintPuzzle(); return; }
@@ -1183,7 +1276,6 @@
     if (a === 'mode') { S.cfg.mode = t.getAttribute('data-v'); write(K.cfg, S.cfg); renderSet(); return; }
     if (a === 'setAlpha') { S.cfg.alpha = t.getAttribute('data-v') === '1'; write(K.cfg, S.cfg); applyUI(); renderSet(); return; }
     if (a === 'wordfont') { S.cfg.wordfont = t.getAttribute('data-v'); write(K.cfg, S.cfg); applyUI(); renderSet(); return; }
-    if (a === 'uiMode') { S.cfg.ui = t.getAttribute('data-v'); write(K.cfg, S.cfg); applyUI(); renderSet(); renderTop(); return; }
     if (a === 'toggleLevel') {
       var L2 = +t.getAttribute('data-v');
       var ix = S.cfg.levels.indexOf(L2);
@@ -1224,12 +1316,7 @@
     var nb = e.target.closest('.nav-btn');
     if (nb) go(nb.getAttribute('data-tab'));
   });
-  document.addEventListener('click', function (e) {
-    var sw = e.target.closest('#uiSwitch button');
-    if (sw) { S.cfg.ui = sw.getAttribute('data-ui'); write(K.cfg, S.cfg); applyUI(); RENDER[S.tab](); }
-  });
   window.addEventListener('resize', function () {
-    if (S.cfg.ui !== 'auto') return;
     var eff = window.innerWidth >= 900 ? 'pad' : 'phone';
     if (eff !== S.eff) { applyUI(); RENDER[S.tab](); }
   });
@@ -1276,7 +1363,6 @@
       ensurePlan();
       var q = parseQS();
       if (q.demo === '1') seedDemo();
-      if (q.ui === 'phone' || q.ui === 'pad' || q.ui === 'auto') { S.cfg.ui = q.ui; applyUI(); }
       paintBadge();
       $('#versionTag').textContent = window.__SW_VER || 'v1';
     var tab = q.tab || (location.hash || '').replace('#', '');
