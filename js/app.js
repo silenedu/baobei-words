@@ -1557,7 +1557,7 @@
     }
     if (a === 'nextWord') { advanceSolved(S.lrn.pz); return; }
     if (a === 'spNext') { advanceSolved(S.sp.pz); return; }
-    if (a === 'spNew') { startSpellRound(); return; }
+    if (a === 'spNew') { hideCelebrate(); startSpellRound(); return; }
     if (a === 'game') {
       var g = t.getAttribute('data-v');
       if (g !== S.m.game) {
@@ -1603,7 +1603,7 @@
       renderMatch();
       return;
     }
-    if (a === 'newRound') { startRound(); return; }
+    if (a === 'newRound') { hideCelebrate(); startRound(); return; }
     if (a === 'pickL') { pickL(+t.getAttribute('data-i')); return; }
     if (a === 'pickR') { pickR(+t.getAttribute('data-i')); return; }
     if (a === 'dropWrong') { dropWrong(t.getAttribute('data-w')); renderWrong(); toast('Mastered — great job!'); return; }
