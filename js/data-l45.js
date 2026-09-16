@@ -64,7 +64,7 @@ const W45 = [
   /* ---------- Level 4 · pr ---------- */
   { w:'present', cn:'礼物', e:'🎁', L:4, p:'pr', c:'pr/e/s/e/nt', hc:[0], ps:'n.', d:'Something you give to someone.', x:'This present is for you.', z:'这个礼物送给你。' },
   { w:'prince', cn:'王子', e:'🤴', L:4, p:'pr', c:'pr/i/n/ce', hc:[0], ps:'n.', d:'The son of a king or queen.', x:'The prince has a white horse.', z:'王子有一匹白马。' },
-  { w:'princess', cn:'公主', e:'🎀', L:4, p:'pr', c:'pr/i/n/ce/ss', hc:[0], ps:'n.', d:'The daughter of a king or queen.', x:'The princess is very kind.', z:'这位公主很善良。' },
+  { w:'princess', cn:'公主', e:'👸', L:4, p:'pr', c:'pr/i/n/ce/ss', hc:[0], ps:'n.', d:'The daughter of a king or queen.', x:'The princess is very kind.', z:'这位公主很善良。' },
   { w:'prize', cn:'奖品', e:'🥇', L:4, p:'pr', c:'pr/i/z/e', hc:[0], ps:'n.', d:'Something you win in a game.', x:'You get a prize for the game.', z:'你玩游戏得到了奖品。' },
 
   /* ---------- Level 4 · tr ---------- */
@@ -76,7 +76,7 @@ const W45 = [
   { w:'scarf', cn:'围巾', e:'🧣', L:4, p:'sc', c:'sc/ar/f', hc:[0], ps:'n.', d:'A warm thing you wear around your neck.', x:'Put on your scarf.', z:'把围巾戴上。' },
   { w:'scooter', cn:'滑板车', e:'🛴', L:4, p:'sc', c:'sc/oo/t/er', hc:[0], ps:'n.', d:'A thing with wheels you push and ride.', x:'I ride my scooter to the park.', z:'我骑滑板车去公园。' },
   { w:'school', cn:'学校', e:'🏫', L:4, p:'sc', c:'sc/h/oo/l', hc:[0], ps:'n.', d:'The place where children learn.', x:'I go to school every day.', z:'我每天去上学。' },
-  { w:'skirt', cn:'短裙', e:'👚', L:5, p:'ir', c:'sk/ir/t', hc:[1], ps:'n.', d:'Clothes a girl wears around her waist.', x:'Her skirt is blue.', z:'她的短裙是蓝色的。' },
+  { w:'skirt', cn:'短裙', e:'👗', L:5, p:'ir', c:'sk/ir/t', hc:[1], ps:'n.', d:'Clothes a girl wears around her waist.', x:'Her skirt is blue.', z:'她的短裙是蓝色的。' },
   { w:'skate', cn:'滑冰', e:'🛹', L:4, p:'sk', c:'sk/a/t/e', hc:[0], ps:'v.', d:'To move on ice or roads with special boots.', x:'I can skate on the ice.', z:'我会在冰上滑冰。' },
   { w:'sky', cn:'天空', e:'🌌', L:5, p:'y', c:'sk/y', hc:[1], ps:'n.', d:'The space above you where clouds are.', x:'Look at the sky at night.', z:'晚上的时候看看天空。' },
   { w:'skip', cn:'跳绳', e:'🤸', L:4, p:'sk', c:'sk/i/p', hc:[0], ps:'v.', d:'To jump again and again over a rope.', x:'Let us skip in the garden.', z:'我们去院子里跳绳吧。' },
@@ -131,7 +131,7 @@ const W45 = [
   { w:'elephant', cn:'大象', e:'🐘', L:4, p:'ph', c:'e/l/e/ph/a/nt', hc:[3], ps:'n.', d:'A very big gray animal with a long nose.', x:'An elephant has a long trunk.', z:'大象有长长的鼻子。' },
   { w:'duck', cn:'鸭子', e:'🦆', L:4, p:'ck', c:'d/u/ck', hc:[2], ps:'n.', d:'A bird that swims in water.', x:'The duck is in the pond.', z:'鸭子在池塘里。' },
   { w:'sock', cn:'袜子', e:'🧦', L:4, p:'ck', c:'s/o/ck', hc:[2], ps:'n.', d:'A soft thing you wear on your foot.', x:'Where is my other sock?', z:'我另一只袜子在哪里？' },
-  { w:'rock', cn:'岩石', e:'🗿', L:4, p:'ck', c:'r/o/ck', hc:[2], ps:'n.', d:'A big hard stone.', x:'We sit on a big rock.', z:'我们坐在一块大岩石上。' },
+  { w:'rock', cn:'岩石', e:'🪨', L:4, p:'ck', c:'r/o/ck', hc:[2], ps:'n.', d:'A big hard stone.', x:'We sit on a big rock.', z:'我们坐在一块大岩石上。' },
   { w:'neck', cn:'脖子', e:'🦒', L:4, p:'ck', c:'n/e/ck', hc:[2], ps:'n.', d:'The part between your head and body.', x:'The giraffe has a long neck.', z:'长颈鹿的脖子很长。' },
   { w:'chick', cn:'小鸡', e:'🐥', L:4, p:'ck', c:'ch/i/ck', hc:[2], ps:'n.', d:'A baby chicken.', x:'The chick is very small.', z:'小鸡很小。' },
 
