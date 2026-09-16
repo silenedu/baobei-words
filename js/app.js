@@ -113,6 +113,18 @@
       '<path d="M20 93 q8 5 16 0" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round"/>' +
       '<path d="M74 105 q8 5 16 0" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round"/>' +
       '<path d="M48 85 q7 4 14 0" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round"/>' +
+      '</svg>',
+    /* curtain 没有对应的 emoji → 手绘一幅小窗帘 */
+    curtain: '<svg class="pic-svg" viewBox="0 0 120 120" aria-hidden="true">' +
+      '<rect width="120" height="120" rx="18" fill="#FFF7DE"/>' +
+      '<rect x="30" y="30" width="60" height="66" rx="6" fill="#BEE9FF"/>' +
+      '<circle cx="46" cy="52" r="9" fill="#FFD84D"/>' +
+      '<rect x="22" y="22" width="76" height="9" rx="4.5" fill="#8A6B4F"/>' +
+      '<circle cx="30" cy="26.5" r="3" fill="#5F4633"/><circle cx="60" cy="26.5" r="3" fill="#5F4633"/><circle cx="90" cy="26.5" r="3" fill="#5F4633"/>' +
+      '<path d="M20 31 Q26 60 22 100 L44 100 Q40 62 44 31 Q32 24 20 31 Z" fill="#F26D6D"/>' +
+      '<path d="M100 31 Q94 60 98 100 L76 100 Q80 62 76 31 Q88 24 100 31 Z" fill="#F26D6D"/>' +
+      '<path d="M28 34 Q32 62 30 96" stroke="#D94F4F" stroke-width="3" fill="none" stroke-linecap="round"/>' +
+      '<path d="M92 34 Q88 62 90 96" stroke="#D94F4F" stroke-width="3" fill="none" stroke-linecap="round"/>' +
       '</svg>'
   };
   /* 取一个词的“图片”：优先自定义插画 → 自带 emoji → 剑桥词库映射的 emoji（入参可为 word 对象或 id） */
