@@ -82,7 +82,7 @@ const W23 = [
   { w:'bake', cn:'烤', e:'🥖', L:3, p:'a_e', c:'b/a/k/e', hc:[1,3], ps:'v.', d:'To cook food in an oven.', x:'My mum can bake bread.', z:'我妈妈会烤面包。' },
   { w:'game', cn:'游戏', e:'🎮', L:3, p:'a_e', c:'g/a/m/e', hc:[1,3], ps:'n.', d:'Something you play and have fun with.', x:'Let us play a fun game!', z:'我们玩一个好玩的游戏吧！' },
   { w:'name', cn:'名字', e:'🏷️', L:3, p:'a_e', c:'n/a/m/e', hc:[1,3], ps:'n.', d:'The word that we call you by.', x:'Can you write your name?', z:'你会写自己的名字吗？' },
-  { w:'lake', cn:'湖', e:'🏞️', L:3, p:'a_e', c:'l/a/k/e', hc:[1,3], ps:'n.', d:'A big area of water with land around it.', x:'The lake is very blue.', z:'湖水很蓝。' },
+  { w:'lake', cn:'湖', e:'🌊', L:3, p:'a_e', c:'l/a/k/e', hc:[1,3], ps:'n.', d:'A big area of water with land around it.', x:'The lake is very blue.', z:'湖水很蓝。' },
   { w:'snake', cn:'蛇', e:'🐍', L:3, p:'a_e', c:'s/n/a/k/e', hc:[2,4], ps:'n.', d:'A long animal with no legs.', x:'The snake is long and green.', z:'这条蛇又长又绿。' },
   { w:'plane', cn:'飞机', e:'✈️', L:3, p:'a_e', c:'p/l/a/n/e', hc:[2,4], ps:'n.', d:'A machine that flies in the sky.', x:'The plane goes up in the sky.', z:'飞机飞上了天。' },
   { w:'whale', cn:'鲸鱼', e:'🐋', L:3, p:'a_e', c:'w/h/a/l/e', hc:[2,4], ps:'n.', d:'A very big animal that lives in the sea.', x:'A whale is bigger than a boat.', z:'鲸鱼比船还大。' },
@@ -94,7 +94,7 @@ const W23 = [
   /* ---------- Level 3 · ai ---------- */
   { w:'rain', cn:'雨', e:'🌧️', L:3, p:'ai', c:'r/ai/n', hc:[1], ps:'n.', d:'Water that falls from the sky.', x:'The rain is cold today.', z:'今天的雨很冷。' },
   { w:'train', cn:'火车', e:'🚂', L:3, p:'ai', c:'t/r/ai/n', hc:[2], ps:'n.', d:'A long thing on wheels that runs on tracks.', x:'The train goes very fast.', z:'火车跑得很快。' },
-  { w:'tail', cn:'尾巴', e:'🐒', L:3, p:'ai', c:'t/ai/l', hc:[1], ps:'n.', d:'The part that hangs at the back of an animal.', x:'The monkey has a long tail.', z:'猴子有一条长尾巴。' },
+  { w:'tail', cn:'尾巴', e:'🐱', L:3, p:'ai', c:'t/ai/l', hc:[1], ps:'n.', d:'The part that hangs at the back of an animal.', x:'The cat has a long tail.', z:'小猫有一条长尾巴。' },
   { w:'snail', cn:'蜗牛', e:'🐌', L:3, p:'ai', c:'s/n/ai/l', hc:[2], ps:'n.', d:'A small animal that walks very slowly.', x:'The snail is very slow.', z:'蜗牛走得很慢。' },
   { w:'paint', cn:'画画', e:'🎨', L:3, p:'ai', c:'p/ai/n/t', hc:[1], ps:'v.', d:'To make a picture with colours.', x:'I paint a big rainbow.', z:'我画了一道大彩虹。' },
   { w:'mail', cn:'邮件', e:'✉️', L:3, p:'ai', c:'m/ai/l', hc:[1], ps:'n.', d:'Letters that you send to someone.', x:'I have mail from my friend.', z:'我收到了朋友的邮件。' },
