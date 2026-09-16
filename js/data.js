@@ -7,83 +7,83 @@
 (function (global) {
   'use strict';
 
-  /* 牛津自拼级别 */
+  /* Oxford Phonics levels */
   var LEVEL_META = {
-    2: { name: '2 级 · 短元音', short: '短元音' },
-    3: { name: '3 级 · 长元音', short: '长元音' },
-    4: { name: '4 级 · 辅音组合', short: '辅音组合' },
-    5: { name: '5 级 · 字母组合', short: '字母组合' }
+    2: { name: 'Level 2 · Short Vowels', short: 'Short Vowels' },
+    3: { name: 'Level 3 · Long Vowels', short: 'Long Vowels' },
+    4: { name: 'Level 4 · Consonant Teams', short: 'Consonant Teams' },
+    5: { name: 'Level 5 · Letter Teams', short: 'Letter Teams' }
   };
 
-  /* 词库（配对游戏/筛选用） */
+  /* Word banks (matching game / filters) */
   var BANK_META = [
-    { id: 'today', name: '今日单词', icon: '📅' },
-    { id: 'c1', name: '剑桥一级', icon: '1️⃣' },
-    { id: 'c2', name: '剑桥二级', icon: '2️⃣' },
-    { id: 'c3', name: '剑桥三级', icon: '3️⃣' },
+    { id: 'today', name: 'Today', icon: '📅' },
+    { id: 'c1', name: 'Starters', icon: '1️⃣' },
+    { id: 'c2', name: 'Movers', icon: '2️⃣' },
+    { id: 'c3', name: 'Flyers', icon: '3️⃣' },
     { id: 'ket', name: 'KET', icon: '🎯' },
     { id: 'pet', name: 'PET', icon: '🏅' },
-    { id: 'wrong', name: '错题库', icon: '💡' }
+    { id: 'wrong', name: 'Mistakes', icon: '💡' }
   ];
 
   /* 每级默认归属的词库 */
   var DEFAULT_BANKS = { 2: ['c1'], 3: ['c1', 'c2'], 4: ['c2', 'c3'], 5: ['c3'] };
 
-  /* 自拼规律的自然拼读提示 */
+  /* Phonics tips (natural spelling hints) */
   var PATTERN_SOUND = {
-    a: '短元音 a，读 /æ/，嘴巴张大',
-    e: '短元音 e，读 /e/，嘴巴扁扁',
-    i: '短元音 i，读 /ɪ/，短促轻快',
-    o: '短元音 o，读 /ɒ/，嘴巴圆圆',
-    u: '短元音 u，读 /ʌ/，轻轻短短',
-    a_e: '魔法 e：a 读字母音 /eɪ/，结尾 e 不发音',
-    i_e: '魔法 e：i 读字母音 /aɪ/，结尾 e 不发音',
-    o_e: '魔法 e：o 读字母音 /əʊ/，结尾 e 不发音',
-    u_e: '魔法 e：u 读字母音 /juː/，结尾 e 不发音',
-    ai: 'ai 一起读长音 /eɪ/',
-    ay: 'ay 在词尾读长音 /eɪ/',
-    ee: 'ee 一起读长音 /iː/',
-    ea: 'ea 多数读长音 /iː/，有时读短音 /e/',
-    y: '词尾 y 常读 /i/ 或 /aɪ/',
-    igh: 'igh 一起读 /aɪ/，gh 不发音',
-    ie: 'ie 一起读长音 /aɪ/',
-    oa: 'oa 一起读长音 /əʊ/',
-    ow: 'ow 读 /əʊ/（snow）或 /aʊ/（cow）',
-    ue: 'ue 一起读长音 /uː/',
-    ui: 'ui 一起读长音 /uː/',
-    ew: 'ew 一起读长音 /uː/',
-    oo: 'oo 读长音 /uː/（moon）或短音 /ʊ/（book）',
-    ou: 'ou 一起读 /aʊ/（house）',
-    oi: 'oi 一起读 /ɔɪ/',
-    oy: 'oy 在词尾读 /ɔɪ/',
-    au: 'au 一起读 /ɔː/',
-    aw: 'aw 一起读 /ɔː/',
-    al: 'al 常读 /ɔː/（ball）',
-    ar: 'ar 一起读 /ɑː/',
-    or: 'or 一起读 /ɔː/',
-    our: 'our 常读 /ɔː/（journey）',
-    ous: 'ous 在词尾读 /əs/',
-    er: 'er 在词尾读轻声 /ə/',
-    ir: 'ir 一起读 /ɜː/',
-    ur: 'ur 一起读 /ɜː/',
-    ear: 'ear 读 /ɪə/（ear）',
-    air: 'air 读 /eə/（hair）',
-    are: 'are 读 /eə/（square）',
-    ure: 'ure 读 /ə/ 或 /tʃə/（picture）',
-    nd: '结尾 nd 连读，像 han-d',
-    nt: '结尾 nt 连读，像 ten-t',
-    mp: '结尾 mp 连读，像 jum-p',
-    nk: '结尾 nk 连读，像 pin-k',
-    ng: '结尾 ng 一起读 /ŋ/（king）',
-    lk: '结尾 lk 连读，像 mil-k',
-    sk: 'sk 一起读（skate / desk）'
+    a: 'Short a says /æ/ — open your mouth wide',
+    e: 'Short e says /e/ — smile a little',
+    i: 'Short i says /ɪ/ — quick and light',
+    o: 'Short o says /ɒ/ — round your lips',
+    u: 'Short u says /ʌ/ — short and soft',
+    a_e: 'Magic e: a says its name /eɪ/, the e at the end is silent',
+    i_e: 'Magic e: i says its name /aɪ/, the e at the end is silent',
+    o_e: 'Magic e: o says its name /əʊ/, the e at the end is silent',
+    u_e: 'Magic e: u says /juː/, the e at the end is silent',
+    ai: 'ai together says /eɪ/',
+    ay: 'ay at the end says /eɪ/',
+    ee: 'ee together says /iː/',
+    ea: 'ea often says /iː/, sometimes short /e/',
+    y: 'y at the end often says /i/ or /aɪ/',
+    igh: 'igh together says /aɪ/, gh is silent',
+    ie: 'ie together says /aɪ/',
+    oa: 'oa together says /əʊ/',
+    ow: 'ow says /əʊ/ (snow) or /aʊ/ (cow)',
+    ue: 'ue together says /uː/',
+    ui: 'ui together says /uː/',
+    ew: 'ew together says /uː/',
+    oo: 'oo says /uː/ (moon) or short /ʊ/ (book)',
+    ou: 'ou together says /aʊ/ (house)',
+    oi: 'oi together says /ɔɪ/',
+    oy: 'oy at the end says /ɔɪ/',
+    au: 'au together says /ɔː/',
+    aw: 'aw together says /ɔː/',
+    al: 'al often says /ɔː/ (ball)',
+    ar: 'ar together says /ɑː/',
+    or: 'or together says /ɔː/',
+    our: 'our often says /ɔː/ (journey)',
+    ous: 'ous at the end says /əs/',
+    er: 'er at the end says the soft sound /ə/',
+    ir: 'ir together says /ɜː/',
+    ur: 'ur together says /ɜː/',
+    ear: 'ear says /ɪə/ (ear)',
+    air: 'air says /eə/ (hair)',
+    are: 'are says /eə/ (square)',
+    ure: 'ure says /ə/ or /tʃə/ (picture)',
+    nd: 'nd at the end blends: han-d',
+    nt: 'nt at the end blends: ten-t',
+    mp: 'mp at the end blends: jum-p',
+    nk: 'nk at the end blends: pin-k',
+    ng: 'ng together says /ŋ/ (king)',
+    lk: 'lk at the end blends: mil-k',
+    sk: 'sk together (skate / desk)'
   };
-  var CONSONANT_TIP = ' 组合：两个字母连着读';
+  var CONSONANT_TIP = ' blend: two letters read together';
 
   function tipFor(p) {
     if (PATTERN_SOUND[p]) return PATTERN_SOUND[p];
     if (p && p.length > 1) return p + CONSONANT_TIP;
-    return '读出这个字母的字母音';
+    return 'Say the letter sound';
   }
 
   var WORDS = [];
