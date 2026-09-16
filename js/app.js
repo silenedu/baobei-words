@@ -12,7 +12,7 @@
   /* ============ 存储 ============ */
   var K = { cfg: 'pw_cfg_v1', prog: 'pw_prog_v1', plan: 'pw_plan_v1', hist: 'pw_hist_v1', wrong: 'pw_wrong_v1' };
   var DEFAULT_CFG = {
-    name: '含含', daily: 8, mode: 'en', voice: '', rate: 0.85,
+    name: 'Buddy', daily: 8, mode: 'en', voice: '', rate: 0.85, ex: true,
     levels: [2, 3, 4, 5], alpha: true, ui: 'auto', wordfont: 'play', sound: true
   };
   function read(key, def) {
@@ -52,7 +52,8 @@
     var da = new Date(+pa[0], +pa[1] - 1, +pa[2]), db = new Date(+pb[0], +pb[1] - 1, +pb[2]);
     return Math.round((db - da) / 86400000);
   }
-  var WEEK = ['日', '一', '二', '三', '四', '五', '六'];
+  var WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   var INTERVALS = [1, 2, 4, 7, 15, 30, 60];
 
   /* ============ 小工具 ============ */
@@ -83,19 +84,16 @@
     var a = accent(w);
     return '<div class="pic-card ' + (extraCls || '') + '" style="--a:' + a[0] + ';--b:' + a[1] + '">' +
       '<span class="emo">' + w.e + '</span>' +
-      '<button class="spk" data-act="speak" data-text="' + esc(w.w) + '" aria-label="点读">🔊</button>' +
+      '<button class="spk" data-act="speak" data-text="' + esc(w.w) + '" aria-label="read">🔊</button>' +
       '</div>';
   }
   function defHTML(w) {
-    if (S.cfg.mode === 'cn') {
-      return '<div class="def-box"><div class="dline"><span class="k">中文</span><span>' + esc(w.cn) + '</span></div></div>';
-    }
     return '<div class="def-box"><div class="dline"><span class="k">EN</span><span>' + esc(w.d) + '</span></div></div>';
   }
   function exHTML(w) {
+    if (!S.cfg.ex || !w.x) return '';
     return '<div class="ex-box">' +
-      '<div class="e-en"><button class="spk-line" data-act="speak" data-text="' + esc(w.x) + '">🔊</button><span>' + esc(w.x) + '</span></div>' +
-      '<div class="e-cn">' + esc(w.z) + '</div></div>';
+      '<div class="e-en"><button class="spk-line" data-act="speak" data-text="' + esc(w.x) + '">🔊</button><span>' + esc(w.x) + '</span></div></div>';
   }
   function wordCardHTML(w, opts) {
     opts = opts || {};
@@ -105,8 +103,8 @@
         '<div class="wc-word">' + lettersHTML(w, 'wc-big') + '<button class="spk-line" data-act="speak" data-text="' + esc(w.w) + '">🔊</button></div>' +
         '<div class="wc-meta"><span class="pill pos">' + esc(w.ps) + '</span><span class="pill pat">' + esc(w.p) + '</span>' +
           (opts.badge ? '<span class="pill ' + opts.badge.cls + '">' + esc(opts.badge.text) + '</span>' : '') + '</div>' +
-        '<div class="wc-def">' + esc(w.d) + '<span class="cn">' + esc(w.cn) + '</span></div>' +
-        '<div class="wc-ex">' + esc(w.x) + '<br>' + esc(w.z) + '</div>' +
+        '<div class="wc-def">' + esc(w.d) + '</div>' +
+        (S.cfg.ex && w.x ? '<div class="wc-ex">' + esc(w.x) + '</div>' : '') +
       '</div>' +
       (opts.actions || '') +
       '</div>';
@@ -143,7 +141,7 @@
     }
   }
   function speak(text, rate) {
-    if (!('speechSynthesis' in window)) { toast('这个浏览器还不支持朗读哦'); return; }
+    if (!('speechSynthesis' in window)) { toast('Reading is not supported in this browser'); return; }
     try {
       speechSynthesis.cancel();
       var u = new SpeechSynthesisUtterance(text);
@@ -318,14 +316,14 @@
     document.documentElement.setAttribute('data-wordfont', S.cfg.wordfont === 'plain' ? 'plain' : 'play');
     var sw = document.querySelectorAll('#uiSwitch button');
     for (var i = 0; i < sw.length; i++) sw[i].classList.toggle('on', sw[i].getAttribute('data-ui') === want);
-    $('#babyName').textContent = S.cfg.name || '宝贝';
+    $('#babyName').textContent = S.cfg.name || 'Buddy';
   }
   function paintTop() {
     var t = todayStr();
     var p = t.split('-');
     var d = new Date(+p[0], +p[1] - 1, +p[2]);
-    $('#todayLabel').textContent = (p[1] * 1) + ' 月 ' + (p[2] * 1) + ' 日 · 星期' + WEEK[d.getDay()] +
-      ' · 已连续打卡 ' + streak() + ' 天';
+    $('#todayLabel').textContent = MONTHS[d.getMonth()] + ' ' + (p[2] * 1) + ' · ' + WEEK[d.getDay()] +
+      ' · ' + streak() + '-day streak';
   }
 
   /* ============ 数据面板 ============ */
@@ -353,24 +351,24 @@
     var wrongN = Object.keys(S.wrong).length;
 
     var hero = '<div class="hero">' + ring(pct, Math.round(pct * 100) + '%') +
-      '<div><div class="ht">' + (isToday ? (planDone >= planTotal && planTotal ? '今天全部完成啦！🎉' : '今天要背 ' + planTotal + ' 个单词') :
-        (date.slice(5) + ' 的学习记录')) + '</div>' +
-      '<div class="hs">' + (isToday ? '已完成 ' + planDone + ' / ' + planTotal + ' 个 · 新学 ' + plan.doneNew.length + ' · 复习 ' + plan.doneReview.length
-        : '新学 ' + doneN + ' 个 · 复习 ' + doneR + ' 个') + '</div>' +
+      '<div><div class="ht">' + (isToday ? (planDone >= planTotal && planTotal ? 'All done for today! 🎉' : 'Words to learn today: ' + planTotal)
+        : (date.slice(5) + ' study record')) + '</div>' +
+      '<div class="hs">' + (isToday ? 'Done ' + planDone + ' / ' + planTotal + ' · New ' + plan.doneNew.length + ' · Review ' + plan.doneReview.length
+        : 'New ' + doneN + ' · Review ' + doneR) + '</div>' +
       '<button class="btn hbtn" data-act="' + (isToday ? 'goLearn' : 'backToday') + '">' +
-      (isToday ? (planDone >= planTotal && planTotal ? '再玩一局配对 🧩' : '去背单词 📚') : '回到今天') + '</button></div></div>';
+      (isToday ? (planDone >= planTotal && planTotal ? 'Play a match 🧩' : 'Start learning 📚') : 'Back to today') + '</button></div></div>';
 
     var tiles = '<div class="tiles">' +
       '<button class="tile-btn new" data-act="openList" data-kind="new" data-date="' + date + '">' +
-        '<span class="th">🌱</span><div class="tn">' + doneN + '</div><div class="tl">这天新学的单词</div></button>' +
+        '<span class="th">🌱</span><div class="tn">' + doneN + '</div><div class="tl">New words learned</div></button>' +
       '<button class="tile-btn rev" data-act="openList" data-kind="review" data-date="' + date + '">' +
-        '<span class="th">🔁</span><div class="tn">' + doneR + '</div><div class="tl">这天复习的单词</div></button>' +
+        '<span class="th">🔁</span><div class="tn">' + doneR + '</div><div class="tl">Words reviewed</div></button>' +
       '</div>';
 
     var mini = '<div class="mini">' +
-      '<div><div class="mn">' + learned + '</div><div class="ml">累计学会</div></div>' +
-      '<div><div class="mn">' + nowDue + '</div><div class="ml">待复习</div></div>' +
-      '<div><div class="mn">' + wrongN + '</div><div class="ml">错题</div></div>' +
+      '<div><div class="mn">' + learned + '</div><div class="ml">Learned</div></div>' +
+      '<div><div class="mn">' + nowDue + '</div><div class="ml">To review</div></div>' +
+      '<div><div class="mn">' + wrongN + '</div><div class="ml">Mistakes</div></div>' +
       '</div>';
 
     /* 近 7 天柱状图 */
@@ -388,9 +386,9 @@
         '<div class="bar-stack">' +
         (v.n ? '<div class="bar-new" style="height:' + Math.max(6, hn) + '%"></div>' : '') +
         (v.r ? '<div class="bar-rev" style="height:' + Math.max(6, hr) + '%"></div>' : '') +
-        '</div><div class="bar-lab">' + (v.d.slice(8) * 1) + '日</div></div>';
+        '</div><div class="bar-lab">' + (v.d.slice(8) * 1) + '</div></div>';
     }).join('') + '</div>' +
-      '<div class="legend"><span><i style="background:#A6E63A"></i>新学</span><span><i style="background:#7C9BFF"></i>复习</span></div>';
+      '<div class="legend"><span><i style="background:#A6E63A"></i>New</span><span><i style="background:#7C9BFF"></i>Review</span></div>';
 
     /* 日历 */
     if (!S.cal) { S.cal = { y: new Date().getFullYear(), m: new Date().getMonth() }; }
@@ -408,20 +406,20 @@
       cells += '<button class="' + cls + '" data-act="calDay" data-d="' + ds2 + '">' + day + '</button>';
     }
     var cal = '<div class="cal-head"><button class="icon-btn" data-act="calPrev">‹</button>' +
-      '<b>' + y + ' 年 ' + (m + 1) + ' 月</b>' +
+      '<b>' + MONTHS[m] + ' ' + y + '</b>' +
       '<button class="icon-btn" data-act="calNext">›</button></div>' +
       '<div class="cal-grid">' + wd + cells + '</div>' +
-      '<div style="font-size:12px;color:var(--ink3);font-weight:800;text-align:center;margin-top:8px">点日期看当天单词 · 绿色圆点表示有学习记录</div>';
+      '<div style="font-size:12px;color:var(--ink3);font-weight:800;text-align:center;margin-top:8px">Tap a date to see its words · green dot = studied</div>';
 
     var left = hero + tiles + mini +
-      '<div class="sec-title"><span class="em">💡</span>错题提醒</div>' +
+      '<div class="sec-title"><span class="em">💡</span>Mistakes to review</div>' +
       (wrongN ? '<div class="card" style="display:flex;align-items:center;gap:12px">' +
-        '<div style="font-size:34px">💡</div><div style="flex:1"><b>有 ' + wrongN + ' 个单词需要再看看</b>' +
-        '<div style="font-size:12px;color:var(--ink3);font-weight:700">做配对游戏答错的单词会收集在这里</div></div>' +
-        '<button class="btn sm soft" data-act="goWrong">去看</button></div>'
-        : '<div class="card"><div class="empty"><span class="big">🎉</span>还没有错题，太棒啦！</div></div>');
-    var right = '<div class="sec-title"><span class="em">📈</span>近 7 天学习量</div><div class="card">' + bars + '</div>' +
-      '<div class="sec-title"><span class="em">🗓</span>学习日历</div><div class="card">' + cal + '</div>';
+        '<div style="font-size:34px">💡</div><div style="flex:1"><b>' + wrongN + ' words need another look</b>' +
+        '<div style="font-size:12px;color:var(--ink3);font-weight:700">Words missed in the match game are saved here</div></div>' +
+        '<button class="btn sm soft" data-act="goWrong">Review</button></div>'
+        : '<div class="card"><div class="empty"><span class="big">🎉</span>No mistakes yet — great job!</div></div>');
+    var right = '<div class="sec-title"><span class="em">📈</span>Last 7 days</div><div class="card">' + bars + '</div>' +
+      '<div class="sec-title"><span class="em">🗓</span>Study calendar</div><div class="card">' + cal + '</div>';
     $('#v-dash').innerHTML = '<div class="pane2"><div>' + left + '</div><div>' + right + '</div></div>';
   }
 
@@ -429,11 +427,11 @@
   function openList(kind, date) {
     var rec = S.hist[date] || { new: [], review: [] };
     var ids = (kind === 'new' ? rec.new : rec.review) || [];
-    var title = date.slice(5) + ' · ' + (kind === 'new' ? '新学' : '复习') + '单词（' + ids.length + '）';
-    if (!ids.length) { return openModal(title, '<div class="empty"><span class="big">🍃</span>这天还没有' + (kind === 'new' ? '新学' : '复习') + '单词</div>'); }
+    var title = date.slice(5) + ' · ' + (kind === 'new' ? 'New' : 'Reviewed') + ' words (' + ids.length + ')';
+    if (!ids.length) { return openModal(title, '<div class="empty"><span class="big">🍃</span>No ' + (kind === 'new' ? 'new' : 'reviewed') + ' words yet</div>'); }
     var html = '<div class="wlist">' + ids.map(function (id) {
       var w = byId[id];
-      return w ? wordCardHTML(w, { badge: { cls: kind === 'new' ? 'news' : 'rev', text: kind === 'new' ? '新学' : '复习' } }) : '';
+      return w ? wordCardHTML(w, { badge: { cls: kind === 'new' ? 'news' : 'rev', text: kind === 'new' ? 'New' : 'Review' } }) : '';
     }).join('') + '</div>';
     openModal(title, html);
   }
@@ -469,7 +467,7 @@
     var planTotal = plan.newIds.length + plan.reviewIds.length;
     if (!S.lrn.q.length) {
       if (!planTotal && !Object.keys(S.prog).length) {
-        v.innerHTML = '<div class="card"><div class="empty"><span class="big">📚</span>还没有可背的单词<br>去看看设置里的自拼范围吧</div></div>';
+        v.innerHTML = '<div class="card"><div class="empty"><span class="big">📚</span>No words to learn yet<br>Pick some phonics levels in Settings</div></div>';
         return;
       }
       var p = ensurePlan();
@@ -484,14 +482,14 @@
     if (!it) { v.innerHTML = doneHTML(); return; }
     var w = byId[it.id];
     var doneCount = S.lrn.q.length - S.lrn.i;
-    var head = '<div class="learn-head"><div><div class="lh-t">' + (it.isNew ? '🌱 新单词' : '🔁 复习单词') + '</div>' +
-      '<div class="lh-s">还剩 ' + doneCount + ' 个就完成今天的任务啦</div></div>' +
+    var head = '<div class="learn-head"><div><div class="lh-t">' + (it.isNew ? '🌱 New word' : '🔁 Review') + '</div>' +
+      '<div class="lh-s">' + doneCount + ' more to finish today</div></div>' +
       '<div class="dots">' + S.lrn.q.map(function (q, idx) {
         return '<i class="' + (idx < S.lrn.i ? 'done' : idx === S.lrn.i ? 'cur' : '') + '"></i>';
       }).join('') + '</div></div>';
 
     var steps = '<div class="steps">' +
-      stepHTML(0, '学', '看 · 听') + stepHTML(1, '读', '录音打分') + stepHTML(2, '拼', '拼一拼') + '</div>';
+      stepHTML(0, 'Learn', 'See · Hear') + stepHTML(1, 'Read', 'Record & Score') + stepHTML(2, 'Spell', 'Spell it') + '</div>';
 
     var body = S.lrn.step === 0 ? stepLearn(w) : S.lrn.step === 1 ? stepRead(w) : stepSpell(w);
     v.innerHTML = head + steps + body;
@@ -506,21 +504,21 @@
     var n = plan.newIds.length, r = plan.reviewIds.length;
     return '<div class="card" style="text-align:center">' +
       '<div style="font-size:64px">🚀</div>' +
-      '<h2 style="font-size:23px;font-weight:900;margin-top:6px">今天要背 ' + (n + r) + ' 个单词</h2>' +
-      '<p style="color:var(--ink2);font-weight:700;margin-top:8px">🌱 新单词 ' + n + ' 个　🔁 复习 ' + r + ' 个</p>' +
-      '<p style="color:var(--ink3);font-weight:700;font-size:13px;margin-top:6px">每个单词都要经过「学 → 读 → 拼」三步哦</p>' +
-      '<div class="btn-row" style="margin-top:18px"><button class="btn" data-act="start">开始背单词</button>' +
-      '<button class="btn ghost" data-act="goMatch">先玩配对</button></div></div>';
+      '<h2 style="font-size:23px;font-weight:900;margin-top:6px">' + (n + r) + ' words to learn today</h2>' +
+      '<p style="color:var(--ink2);font-weight:700;margin-top:8px">🌱 ' + n + ' new　🔁 ' + r + ' review</p>' +
+      '<p style="color:var(--ink3);font-weight:700;font-size:13px;margin-top:6px">Each word goes through 3 steps: Learn → Read → Spell</p>' +
+      '<div class="btn-row" style="margin-top:18px"><button class="btn" data-act="start">Start learning</button>' +
+      '<button class="btn ghost" data-act="goMatch">Play match first</button></div></div>';
   }
   function doneHTML() {
     var h = S.hist[todayStr()] || { new: [], review: [] };
     return '<div class="card" style="text-align:center">' +
       '<div style="font-size:64px">🏆</div>' +
-      '<h2 style="font-size:23px;font-weight:900;margin-top:6px">今天的单词全部背完啦！</h2>' +
-      '<p style="color:var(--ink2);font-weight:700;margin-top:8px">新学 ' + h.new.length + ' 个 · 复习 ' + h.review.length + ' 个</p>' +
+      '<h2 style="font-size:23px;font-weight:900;margin-top:6px">All done for today!</h2>' +
+      '<p style="color:var(--ink2);font-weight:700;margin-top:8px">' + h.new.length + ' new · ' + h.review.length + ' reviewed</p>' +
       '<div class="btn-row" style="margin-top:18px">' +
-      '<button class="btn" data-act="goMatch">去玩配对游戏 🧩</button>' +
-      '<button class="btn ghost" data-act="openList" data-kind="new" data-date="' + todayStr() + '">看今天的词卡</button></div></div>';
+      '<button class="btn" data-act="goMatch">Play the match game 🧩</button>' +
+      '<button class="btn ghost" data-act="openList" data-kind="new" data-date="' + todayStr() + '">See today\'s cards</button></div></div>';
   }
   /* --- 第一步：学 --- */
   function stepLearn(w) {
@@ -529,14 +527,14 @@
       '<div class="word-row">' + lettersHTML(w, 'word-big') +
         '<span class="pat-badge">' + esc(w.p) + '</span>' +
         '<span class="pill pos">' + esc(w.ps) + '</span>' +
-        (it && !it.isNew ? '<span class="pill rev">复习</span>' : '<span class="pill news">新学</span>') + '</div>' +
+        (it && !it.isNew ? '<span class="pill rev">Review</span>' : '<span class="pill news">New</span>') + '</div>' +
       '<div style="font-size:13px;color:var(--ink2);font-weight:800;margin:2px 2px 0">🧠 ' + esc(w.pTip) + '</div>' +
       defHTML(w) + exHTML(w) +
       '<div class="btn-row" style="margin-top:16px">' +
-        '<button class="btn soft" data-act="speak" data-text="' + esc(w.w) + '">🔊 点读单词</button>' +
-        '<button class="btn ghost" data-act="speak" data-text="' + esc(w.w) + '" data-rate="0.62">🐢 慢慢读</button>' +
+        '<button class="btn soft" data-act="speak" data-text="' + esc(w.w) + '">🔊 Read word</button>' +
+        '<button class="btn ghost" data-act="speak" data-text="' + esc(w.w) + '" data-rate="0.62">🐢 Slow</button>' +
       '</div>' +
-      '<div class="btn-row" style="margin-top:12px"><button class="btn wide" data-act="step" data-step="1">我记住啦，去读一读 →</button></div>' +
+      '<div class="btn-row" style="margin-top:12px"><button class="btn wide" data-act="step" data-step="1">I got it, let\'s read →</button></div>' +
       '</div>';
   }
   /* --- 第二步：读 --- */
@@ -546,27 +544,27 @@
     if (S.lrn.score == null && !S.lrn.srdone) {
       body = '<div class="mic-wrap">' +
         '<button class="mic' + (S.lrn.recording ? ' rec' : '') + '" data-act="mic">🎤</button>' +
-        '<div class="mic-tip">' + (S.lrn.recording ? '正在听你说… 读完点一下停止' : '点一下麦克风，大声读出这个单词') + '</div>' +
-        '<div style="font-size:12px;color:var(--ink3);font-weight:700">' + (hasSR ? '说清楚一点，小助手会给你打分哦' : '这个浏览器不能自动打分，读完后自己评一评吧') + '</div>' +
-        (S.lrn.lastRecordURL ? '<button class="btn sm ghost" data-act="replay">▶ 听我上一条录音</button>' : '') +
+        '<div class="mic-tip">' + (S.lrn.recording ? 'Listening… tap to stop when done' : 'Tap the mic and say the word aloud') + '</div>' +
+        '<div style="font-size:12px;color:var(--ink3);font-weight:700">' + (hasSR ? 'Speak clearly and I\'ll score you' : 'This browser can\'t auto-score — just rate yourself') + '</div>' +
+        (S.lrn.lastRecordURL ? '<button class="btn sm ghost" data-act="replay">▶ Hear my last recording</button>' : '') +
         '</div>' +
         (!hasSR ? '<div class="btn-row" style="margin-top:8px">' +
-          '<button class="btn soft" data-act="selfOK">我读对了 👍</button>' +
-          '<button class="btn ghost" data-act="selfAgain">再读一次 🔄</button></div>' : '');
+          '<button class="btn soft" data-act="selfOK">I read it right 👍</button>' +
+          '<button class="btn ghost" data-act="selfAgain">Read again 🔄</button></div>' : '');
     } else {
       body = '<div class="mic-wrap"><div id="scoreBox"></div>' +
-        '<div class="heard no" id="heardBox">还没有听到你的发音</div>' +
+        '<div class="heard no" id="heardBox">No recording heard yet</div>' +
         '<div class="btn-row" style="margin-top:12px">' +
-        '<button class="btn ghost" data-act="mic">🎤 再读一次</button>' +
-        (S.lrn.lastRecordURL ? '<button class="btn soft" data-act="replay">▶ 我的录音</button>' : '') +
+        '<button class="btn ghost" data-act="mic">🎤 Read again</button>' +
+        (S.lrn.lastRecordURL ? '<button class="btn soft" data-act="replay">▶ My recording</button>' : '') +
         '</div>' +
-        '<div class="btn-row" style="margin-top:12px"><button class="btn wide" data-act="step" data-step="2">去拼一拼 →</button></div></div>';
+        '<div class="btn-row" style="margin-top:12px"><button class="btn wide" data-act="step" data-step="2">Let\'s spell →</button></div></div>';
     }
     return '<div class="stage">' +
       '<div style="display:flex;justify-content:center">' + lettersHTML(w, 'word-big') + '</div>' +
       '<div style="display:flex;justify-content:center;gap:8px;margin-top:8px">' +
-        '<button class="btn sm soft" data-act="speak" data-text="' + esc(w.w) + '">🔊 听一遍</button>' +
-        '<button class="btn sm ghost" data-act="speak" data-text="' + esc(w.w) + '" data-rate="0.62">🐢 慢速</button>' +
+        '<button class="btn sm soft" data-act="speak" data-text="' + esc(w.w) + '">🔊 Listen</button>' +
+        '<button class="btn sm ghost" data-act="speak" data-text="' + esc(w.w) + '" data-rate="0.62">🐢 Slow</button>' +
       '</div>' +
       '<div style="text-align:center;font-size:13px;color:var(--ink3);font-weight:800;margin-top:10px">' + esc(w.d) + '</div>' +
       body + '</div>';
@@ -585,12 +583,12 @@
       '<b style="color:' + col + '">' + sc + '</b></div>' +
       '<div><div class="stars">' + '★★★'.slice(0, stars) + '<span style="color:#DCE9EE">' + '★★★'.slice(0, 3 - stars) + '</span></div>' +
       '<div style="font-size:14px;font-weight:800;color:var(--ink2);margin-top:4px">' +
-      (sc >= 88 ? '太棒啦，读得很标准！' : sc >= 72 ? '读得不错，再来一点点！' : '有点小声音哦，再试一次？') + '</div></div></div>' +
-      '<button class="btn wide" data-act="playWord" style="margin-top:6px">🔊 听标准发音对比一下</button>';
+      (sc >= 88 ? 'Awesome, that was perfect!' : sc >= 72 ? 'Nice! Just a little more!' : 'A bit soft — try once more?') + '</div></div></div>' +
+      '<button class="btn wide" data-act="playWord" style="margin-top:6px">🔊 Hear the correct sound</button>';
     var hb = $('#heardBox');
     if (hb) {
       hb.className = 'heard';
-      hb.textContent = '小助手听到的是：「' + (S.lrn.transcript || '（没听清）') + '」';
+      hb.textContent = 'I heard: "' + (S.lrn.transcript || '(could not catch that)') + '"';
     }
   }
   /* 录音 + 识别 */
@@ -670,7 +668,7 @@
     var m = $('.mic');
     if (m) m.classList.toggle('rec', !!S.lrn.recording);
     var tip = $('.mic-tip');
-    if (tip) tip.textContent = S.lrn.recording ? '正在听你说… 读完点一下停止' : '点一下麦克风，大声读出这个单词';
+    if (tip) tip.textContent = S.lrn.recording ? 'I’m listening… tap to stop when you’re done' : 'Tap the mic and say the word loudly';
   }
   function finishRec() {
     if (!S.lrn.recording) return;
@@ -719,8 +717,8 @@
     if (!S.lrn.pz || S.lrn.pz.w.w !== w.w) { S.lrn.pz = buildPuzzle(w); S.lrn.badFlash = false; }
     var pz = S.lrn.pz;
     var tip = w.mode === 'combine'
-      ? '把字母块按顺序拼出来吧（' + w.chunks.length + ' 块）'
-      : '把缺的字母填进去吧（虚线是空位）';
+      ? 'Put the letter blocks in order (' + w.chunks.length + ' blocks)'
+      : 'Fill in the missing letters (dashed = empty space)';
     var slots = pz.slots.map(function (s, i) {
       var cls = 'slot';
       if (s.given) cls += ' given';
@@ -738,21 +736,21 @@
       '<div style="display:flex;gap:12px;align-items:center">' +
         '<div style="flex:none;width:104px">' + picCard(w, 'small-pic') + '</div>' +
         '<div style="flex:1;min-width:0">' +
-          '<div class="def-box" style="margin-top:0"><div class="dline"><span class="k">' + (S.cfg.mode === 'cn' ? '中文' : 'EN') + '</span>' +
-          '<span>' + esc(S.cfg.mode === 'cn' ? w.cn : w.d) + '</span></div></div>' +
+          '<div class="def-box" style="margin-top:0"><div class="dline"><span class="k">EN</span>' +
+          '<span>' + esc(w.d) + '</span></div></div>' +
           '<div class="btn-row" style="margin-top:10px;justify-content:flex-start">' +
-            '<button class="btn sm soft" data-act="speak" data-text="' + esc(w.w) + '">🔊 听发音</button>' +
-            '<button class="btn sm ghost" data-act="speak" data-text="' + esc(w.w) + '" data-rate="0.6">🐢 分解读</button>' +
+            '<button class="btn sm soft" data-act="speak" data-text="' + esc(w.w) + '">🔊 Listen</button>' +
+            '<button class="btn sm ghost" data-act="speak" data-text="' + esc(w.w) + '" data-rate="0.6">🐢 Slow</button>' +
           '</div>' +
         '</div>' +
       '</div>' +
-      '<div class="fill-hint">' + tip + '　·　规律 <b>' + esc(w.p) + '</b></div>' +
+      '<div class="fill-hint">' + tip + '　·　pattern <b>' + esc(w.p) + '</b></div>' +
       '<div class="slots">' + slots + '</div>' +
       '<div class="tiles">' + tiles + '</div>' +
-      (pz.okAll ? '<div class="btn-row" style="margin-top:16px"><button class="btn" data-act="nextWord">太棒了，下一个 →</button></div>' : '') +
+      (pz.okAll ? '<div class="btn-row" style="margin-top:16px"><button class="btn" data-act="nextWord">Great, next →</button></div>' : '') +
       '<div class="btn-row" style="margin-top:16px">' +
-        '<button class="btn ghost sm" data-act="hint">给我一点提示 💡</button>' +
-        '<button class="btn ghost sm" data-act="resetPz">重新拼 🔄</button>' +
+        '<button class="btn ghost sm" data-act="hint">Give me a hint 💡</button>' +
+        '<button class="btn ghost sm" data-act="resetPz">Reset 🔄</button>' +
       '</div>' +
       '</div>';
   }
@@ -813,7 +811,7 @@
         if (first >= 0) {
           p.slots[first].filled = { ch: p.slots[first].ans, fixed: true };
           p.slots[first].given = true;
-          toast('别急，先看看这个字母块：' + p.slots[first].ans);
+          toast('No rush — look at this letter block: ' + p.slots[first].ans);
         }
       }
       renderLearn();
@@ -824,7 +822,7 @@
     if (!pz || pz.solved) return;
     var k = -1;
     for (var i = 0; i < pz.slots.length; i++) if (!pz.slots[i].given && !pz.slots[i].filled) { k = i; break; }
-    if (k < 0) { toast('已经填满啦，点检查看看吧'); return; }
+    if (k < 0) { toast('All filled — tap Check to see'); return; }
     var s = pz.slots[k];
     if (s.isChunk || pz.w.mode === 'combine') {
       for (var j = 0; j < pz.tiles.length; j++) if (!pz.tiles[j].used && pz.tiles[j].ch === s.ans) { pz.tiles[j].used = true; s.filled = { ch: s.ans, tile: j }; break; }
@@ -853,9 +851,9 @@
     S.lrn.srdone = false;
     if (S.lrn.i >= S.lrn.q.length) {
       var h = S.hist[todayStr()] || { new: [], review: [] };
-      celebrate('🏆', '今天的单词全部背完啦！', '新学 ' + h.new.length + ' 个 · 复习 ' + h.review.length + ' 个<br>记得明天再来复习哦～',
-        '<button class="btn" data-act="goMatch">去玩配对游戏 🧩</button>' +
-        '<button class="btn ghost" data-act="closeCelebrate">好，收工</button>');
+      celebrate('🏆', 'All words done for today!', h.new.length + ' new · ' + h.review.length + ' reviewed<br>Come back tomorrow to review!',
+        '<button class="btn" data-act="goMatch">Play the match game 🧩</button>' +
+        '<button class="btn ghost" data-act="closeCelebrate">All done</button>');
       renderLearn();
     } else {
       renderLearn();
@@ -870,29 +868,42 @@
       var p = ensurePlan();
       var ids = p.doneNew.concat(p.doneReview);
       if (!ids.length) ids = p.newIds.concat(p.reviewIds);
-      return ids.map(function (i) { return byId[i]; }).filter(Boolean);
+      return ids.slice();
     }
     if (bank === 'wrong') {
-      return Object.keys(S.wrong).map(function (i) { return byId[i]; }).filter(Boolean);
+      return Object.keys(S.wrong).slice();
     }
-    return (D.bankWords[bank] || []).slice();
+    if (window.PWBanks && window.PWBanks[bank]) return window.PWBanks[bank].slice();
+    return [];
+  }
+  function matchInfo(id) {
+    var it = byId[id];
+    var e = (it && it.e) ? it.e : '';
+    var d = (it && it.d) ? it.d : ((window.PWBanks && window.PWBanks.words[id] && window.PWBanks.words[id][0]) || '');
+    return { w: id, e: e, d: d };
+  }
+  function matchDef(id) {
+    var it = byId[id];
+    if (it && it.d) return it.d;
+    if (window.PWBanks && window.PWBanks.words[id]) return window.PWBanks.words[id][0] || '';
+    return '';
   }
   function startRound() {
     var pool = listForBank(S.m.bank);
     var n = S.eff === 'pad' ? 5 : 4;
+    S.m.done = 0; S.m.wrong = 0; S.m.selL = null; S.m.selR = null;
+    S.m.busy = false; S.m.finished = false; S.m.badL = null; S.m.badR = null;
     if (pool.length < 2) {
       S.m.left = []; S.m.right = []; S.m.total = 0;
       renderMatch();
       return;
     }
     var pick = shuffle(pool).slice(0, Math.min(n, pool.length));
-    S.m.left = shuffle(pick.slice());
-    S.m.right = shuffle(pick.slice());
+    S.m.left = shuffle(pick.map(matchInfo));
+    S.m.right = shuffle(pick.map(matchInfo));
     S.m.total = pick.length;
-    S.m.done = 0; S.m.wrong = 0; S.m.selL = null; S.m.selR = null;
-    S.m.busy = false; S.m.finished = false;
     S.m.pair = {};
-    pick.forEach(function (w) { S.m.pair[w.w] = w.w; });
+    pick.forEach(function (w) { S.m.pair[w] = true; });
     renderMatch();
   }
   function renderMatch() {
@@ -905,33 +916,33 @@
     var pool = listForBank(S.m.bank);
     if (pool.length < 2) {
       $('#v-match').innerHTML = chips + '<div class="card"><div class="empty"><span class="big">🧩</span>' +
-        (S.m.bank === 'wrong' ? '错题库是空的，说明你玩得很棒！' : '这个词库还没有单词哦') + '</div></div>';
+        (S.m.bank === 'wrong' ? 'Your mistake box is empty — you\'re doing great!' : 'This word bank has no words yet') + '</div></div>';
       return;
     }
     if (!S.m.left.length) {
       $('#v-match').innerHTML = chips + '<div class="card" style="text-align:center">' +
-        '<div style="font-size:56px">🧩</div><h3 style="font-size:19px;font-weight:900">单词和英英释义配对</h3>' +
-        '<p style="color:var(--ink2);font-weight:700;font-size:14px;margin-top:8px">先点左边的单词，再点右边的英文解释。<br>答错的单词会进错题库，稍后再复习。</p>' +
-        '<div class="btn-row" style="margin-top:16px"><button class="btn" data-act="newRound">开始一局</button></div></div>';
+        '<div style="font-size:56px">🧩</div><h3 style="font-size:19px;font-weight:900">Match words with their meanings</h3>' +
+        '<p style="color:var(--ink2);font-weight:700;font-size:14px;margin-top:8px">Tap a word on the left, then its definition on the right.<br>Wrong answers go to your mistake box for later review.</p>' +
+        '<div class="btn-row" style="margin-top:16px"><button class="btn" data-act="newRound">Start a round</button></div></div>';
       return;
     }
-    var head = '<div class="match-head"><span>🧩 第 ' + (S.m.done + 1) + ' / ' + S.m.total + ' 对</span>' +
+    var head = '<div class="match-head"><span>🧩 Pair ' + (S.m.done + 1) + ' / ' + S.m.total + '</span>' +
       '<span style="color:#8BC42A">✓ ' + S.m.done + '</span>' +
       '<span style="color:#E96C92">✗ ' + S.m.wrong + '</span>' +
-      '<div class="mh-r"><button class="btn sm ghost" data-act="newRound">换一批</button></div></div>';
+      '<div class="mh-r"><button class="btn sm ghost" data-act="newRound">Shuffle</button></div></div>';
     var left = S.m.left.map(function (w, i) {
       var cls = 'mcard word' + (S.m.selL === i ? ' sel' : '') + (w._ok ? ' ok' : '') + (S.m.badL === i ? ' bad' : '');
       return '<button class="' + cls + '" data-act="pickL" data-i="' + i + '"' + (w._ok ? ' disabled' : '') + '>' +
-        '<span class="me">' + w.e + '</span><span class="mw">' + esc(disp2(w.w)) + '</span></button>';
+        (w.e ? '<span class="me">' + w.e + '</span>' : '') + '<span class="mw">' + esc(disp2(w.w)) + '</span></button>';
     }).join('');
     var right = S.m.right.map(function (w, i) {
       var cls = 'mcard def' + (S.m.selR === i ? ' sel' : '') + (w._ok ? ' ok' : '') + (S.m.badR === i ? ' bad' : '');
       return '<button class="' + cls + '" data-act="pickR" data-i="' + i + '"' + (w._ok ? ' disabled' : '') + '>' + esc(w.d) + '</button>';
     }).join('');
     $('#v-match').innerHTML = chips + head + '<div class="board"><div class="col">' + left + '</div><div class="col">' + right + '</div></div>' +
-      (S.m.finished ? '<div class="match-foot"><button class="btn" data-act="newRound">再来一局 🎉</button>' +
-        '<button class="btn ghost" data-act="goWrong">看看错题 💡</button></div>' : '') +
-      '<div style="font-size:12px;color:var(--ink3);font-weight:800;text-align:center;margin-top:12px">点单词卡片可以听发音 🔊</div>';
+      (S.m.finished ? '<div class="match-foot"><button class="btn" data-act="newRound">Play again 🎉</button>' +
+        '<button class="btn ghost" data-act="goWrong">See mistakes 💡</button></div>' : '') +
+      '<div style="font-size:12px;color:var(--ink3);font-weight:800;text-align:center;margin-top:12px">Tap a word card to hear it 🔊</div>';
   }
   function disp2(s) {
     if (!S.cfg.alpha) return s;
@@ -951,7 +962,7 @@
     if (S.m.busy) return;
     var w = S.m.right[i];
     if (!w || w._ok) return;
-    if (S.m.selL == null) { S.m.selR = i; toast('先点左边的单词哦'); renderMatch(); return; }
+    if (S.m.selL == null) { S.m.selR = i; toast('Tap a word on the left first'); renderMatch(); return; }
     S.m.selR = i;
     judge();
   }
@@ -971,9 +982,9 @@
       renderMatch();
       if (S.m.finished) {
         setTimeout(function () {
-          celebrate('🎉', '全部配对成功！', '答对 ' + S.m.done + ' 对 · 答错 ' + S.m.wrong + ' 次',
-            '<button class="btn" data-act="newRound">再来一局</button>' +
-            '<button class="btn ghost" data-act="closeCelebrate">回去看看</button>');
+          celebrate('🎉', 'All matched!', S.m.done + ' pairs right · ' + S.m.wrong + ' wrong',
+            '<button class="btn" data-act="newRound">Play again</button>' +
+            '<button class="btn ghost" data-act="closeCelebrate">Back</button>');
         }, 420);
       }
     } else {
@@ -993,34 +1004,34 @@
   }
 
   /* ============ 错题本 ============ */
+  function wrongCardHTML(id) {
+    var e = S.wrong[id] || { n: 1 };
+    var it = byId[id];
+    if (it) return wordCardHTML(it, { badge: { cls: 'rev', text: 'Wrong ' + (e.n || 1) + '×' } });
+    var d = matchDef(id);
+    return '<div class="wcard">' +
+      '<div class="wc-pic" style="--a:#EAF5F8;--b:#DCEEF4">🔤</div>' +
+      '<div class="wc-main">' +
+        '<div class="wc-word"><span class="ltr">' + esc(disp2(id)) + '</span>' +
+          '<button class="spk-line" data-act="speak" data-text="' + esc(id) + '">🔊</button></div>' +
+        '<div class="wc-meta"><span class="pill rev">Wrong ' + (e.n || 1) + '×</span></div>' +
+        (d ? '<div class="wc-def">' + esc(d) + '</div>' : '') +
+      '</div>' +
+      '<div class="wc-act">' +
+        '<button class="tagbtn" data-act="speak" data-text="' + esc(id) + '">🔊</button>' +
+        '<button class="tagbtn gray" data-act="dropWrong" data-w="' + esc(id) + '">Got it</button>' +
+      '</div></div>';
+  }
   function renderWrong() {
     var ids = Object.keys(S.wrong).sort(function (a, b) { return (S.wrong[b].n || 0) - (S.wrong[a].n || 0); });
-    var head = '<div class="sec-title"><span class="em">💡</span>错题本（' + ids.length + '）' +
-      (ids.length ? '<button class="btn sm soft more" style="pointer-events:auto" data-act="goMatchWrong">去配对练习 →</button>' : '') + '</div>';
+    var head = '<div class="sec-title"><span class="em">💡</span>Mistake box (' + ids.length + ')' +
+      (ids.length ? '<button class="btn sm soft more" style="pointer-events:auto" data-act="goMatchWrong">Practice →</button>' : '') + '</div>';
     if (!ids.length) {
       $('#v-wrong').innerHTML = head + '<div class="card"><div class="empty"><span class="big">🎉</span>' +
-        '错题本是空的，太棒啦！<br><span style="font-size:13px">玩配对游戏答错的单词会自动收集到这里</span></div></div>';
+        'Your mistake box is empty — amazing!<br><span style="font-size:13px">Words you miss in the match game show up here</span></div></div>';
       return;
     }
-    var list = '<div class="wlist">' + ids.map(function (id) {
-      var w = byId[id];
-      if (!w) return '';
-      var e = S.wrong[id];
-      return '<div class="wcard">' +
-        '<div class="wc-pic" style="--a:' + accent(w)[0] + ';--b:' + accent(w)[1] + '">' + w.e + '</div>' +
-        '<div class="wc-main">' +
-          '<div class="wc-word">' + lettersHTML(w, 'wc-big') + '</div>' +
-          '<div class="wc-meta"><span class="pill pos">' + esc(w.ps) + '</span>' +
-            '<span class="pill pat">' + esc(w.p) + '</span>' +
-            '<span class="pill rev">错 ' + (e.n || 1) + ' 次</span></div>' +
-          '<div class="wc-def">' + esc(w.d) + '<span class="cn">' + esc(w.cn) + '</span></div>' +
-          '<div class="wc-ex">' + esc(w.x) + '<br>' + esc(w.z) + '</div>' +
-        '</div>' +
-        '<div class="wc-act">' +
-          '<button class="tagbtn" data-act="speak" data-text="' + esc(w.w) + '">🔊</button>' +
-          '<button class="tagbtn gray" data-act="dropWrong" data-w="' + esc(w.w) + '">已掌握</button>' +
-        '</div></div>';
-    }).join('') + '</div>';
+    var list = '<div class="wlist">' + ids.map(function (id) { return wrongCardHTML(id); }).join('') + '</div>';
     $('#v-wrong').innerHTML = head + list;
   }
 
@@ -1038,70 +1049,71 @@
         LEVEL_META[L].name + '</button>';
     }).join('');
     var bankStat = BANK_META.filter(function (b) { return b.id !== 'today' && b.id !== 'wrong'; }).map(function (b) {
-      return '<div><div class="sn">' + (D.bankWords[b.id] || []).length + '</div><div class="sl2">' + b.name + '</div></div>';
+      var cnt = (window.PWBanks && window.PWBanks[b.id]) ? window.PWBanks[b.id].length : (D.bankWords[b.id] || []).length;
+      return '<div><div class="sn">' + cnt + '</div><div class="sl2">' + b.name + '</div></div>';
     }).join('');
     v.innerHTML =
-      '<div class="card"><div class="sec-title" style="margin-top:0"><span class="em">👧</span>宝贝信息</div>' +
-        '<div class="set-row" style="display:block"><div class="sl" style="margin-bottom:8px"><b>宝贝的名字</b><span>会显示在首页问候语里</span></div>' +
-        '<input class="inp" id="nameInput" value="' + esc(c.name) + '" maxlength="10" placeholder="例如：含含"></div>' +
-        '<div class="set-row"><div class="sl"><b>每天背几个单词</b><span>新单词 + 复习单词的总数（5-15）</span></div>' +
+      '<div class="card"><div class="sec-title" style="margin-top:0"><span class="em">👧</span>About your child</div>' +
+        '<div class="set-row" style="display:block"><div class="sl" style="margin-bottom:8px"><b>Child\'s name</b><span>Shown in the welcome message</span></div>' +
+        '<input class="inp" id="nameInput" value="' + esc(c.name) + '" maxlength="10" placeholder="e.g. Hahan"></div>' +
+        '<div class="set-row"><div class="sl"><b>Words per day</b><span>New + review words total (5-15)</span></div>' +
         '<div class="stepper"><button data-act="daily" data-v="-1">−</button><b>' + c.daily + '</b><button data-act="daily" data-v="1">＋</button></div></div>' +
-        '<div class="set-row"><div class="sl"><b>释义方式</b><span>英英释义对阅读更有帮助，英汉更好懂</span></div>' +
-        '<div class="seg"><button class="' + (c.mode === 'en' ? 'on' : '') + '" data-act="mode" data-v="en">英英</button>' +
-        '<button class="' + (c.mode === 'cn' ? 'on' : '') + '" data-act="mode" data-v="cn">英汉</button></div></div>' +
+        '<div class="set-row"><div class="sl"><b>Example sentences</b><span>Show a sample sentence for each word</span></div>' +
+        '<div class="seg"><button class="' + (c.ex ? 'on' : '') + '" data-act="toggleEx" data-v="1">On</button>' +
+        '<button class="' + (!c.ex ? 'on' : '') + '" data-act="toggleEx" data-v="0">Off</button></div></div>' +
       '</div>' +
 
-      '<div class="card"><div class="sec-title" style="margin-top:0"><span class="em">🔤</span>单词显示</div>' +
-        '<div class="set-row"><div class="sl"><b>字母 a 显示为 ɑ</b><span>幼儿更容易辨认的字形（发音不受影响）</span></div>' +
-        '<div class="seg"><button class="' + (c.alpha ? 'on' : '') + '" data-act="setAlpha" data-v="1">开</button>' +
-        '<button class="' + (!c.alpha ? 'on' : '') + '" data-act="setAlpha" data-v="0">关</button></div></div>' +
-        '<div class="set-row"><div class="sl"><b>字母字体</b><span>童趣手写体更适合启蒙</span></div>' +
-        '<div class="seg"><button class="' + (c.wordfont !== 'plain' ? 'on' : '') + '" data-act="wordfont" data-v="play">童趣</button>' +
-        '<button class="' + (c.wordfont === 'plain' ? 'on' : '') + '" data-act="wordfont" data-v="plain">清爽</button></div></div>' +
-        '<div class="set-row"><div class="sl"><b>预览模式</b><span>手机 / Pad（Pad 时导航在左侧）</span></div>' +
-        '<div class="seg"><button class="' + (c.ui === 'auto' ? 'on' : '') + '" data-act="uiMode" data-v="auto">自动</button>' +
-        '<button class="' + (c.ui === 'phone' ? 'on' : '') + '" data-act="uiMode" data-v="phone">手机</button>' +
+      '<div class="card"><div class="sec-title" style="margin-top:0"><span class="em">🔤</span>Word display</div>' +
+        '<div class="set-row"><div class="sl"><b>Show a as ɑ</b><span>Easier-to-read shape for kids (sound unchanged)</span></div>' +
+        '<div class="seg"><button class="' + (c.alpha ? 'on' : '') + '" data-act="setAlpha" data-v="1">On</button>' +
+        '<button class="' + (!c.alpha ? 'on' : '') + '" data-act="setAlpha" data-v="0">Off</button></div></div>' +
+        '<div class="set-row"><div class="sl"><b>Letter font</b><span>Playful handwriting suits early learning</span></div>' +
+        '<div class="seg"><button class="' + (c.wordfont !== 'plain' ? 'on' : '') + '" data-act="wordfont" data-v="play">Playful</button>' +
+        '<button class="' + (c.wordfont === 'plain' ? 'on' : '') + '" data-act="wordfont" data-v="plain">Plain</button></div></div>' +
+        '<div class="set-row"><div class="sl"><b>Preview mode</b><span>Phone / Pad (nav on the left for Pad)</span></div>' +
+        '<div class="seg"><button class="' + (c.ui === 'auto' ? 'on' : '') + '" data-act="uiMode" data-v="auto">Auto</button>' +
+        '<button class="' + (c.ui === 'phone' ? 'on' : '') + '" data-act="uiMode" data-v="phone">Phone</button>' +
         '<button class="' + (c.ui === 'pad' ? 'on' : '') + '" data-act="uiMode" data-v="pad">Pad</button></div></div>' +
       '</div>' +
 
-      '<div class="card"><div class="sec-title" style="margin-top:0"><span class="em">🔊</span>发音设置</div>' +
-        '<div class="set-row" style="display:block"><div class="sl" style="margin-bottom:8px"><b>朗读音色</b><span>默认自动挑选甜美的美式女声</span></div>' +
-        '<select class="inp" id="voiceSel">' + (voiceOpts || '<option>暂无可用音色</option>') + '</select></div>' +
-        '<div class="set-row"><div class="sl"><b>语速</b><span>慢一点更适合小朋友</span></div>' +
+      '<div class="card"><div class="sec-title" style="margin-top:0"><span class="em">🔊</span>Pronunciation</div>' +
+        '<div class="set-row" style="display:block"><div class="sl" style="margin-bottom:8px"><b>Voice</b><span>Auto-picks a sweet American female voice</span></div>' +
+        '<select class="inp" id="voiceSel">' + (voiceOpts || '<option>No voice available</option>') + '</select></div>' +
+        '<div class="set-row"><div class="sl"><b>Speed</b><span>Slower is friendlier for kids</span></div>' +
         '<input type="range" id="rateRange" min="0.5" max="1.1" step="0.05" value="' + c.rate + '"></div>' +
-        '<div class="btn-row" style="margin-top:12px"><button class="btn sm soft" data-act="testVoice">试听 "cake"</button>' +
-        '<button class="btn sm ghost" data-act="testVoice2">试听例句</button></div>' +
+        '<div class="btn-row" style="margin-top:12px"><button class="btn sm soft" data-act="testVoice">Try "cake"</button>' +
+        '<button class="btn sm ghost" data-act="testVoice2">Try a sentence</button></div>' +
       '</div>' +
 
-      '<div class="card"><div class="sec-title" style="margin-top:0"><span class="em">🎯</span>学习范围</div>' +
-        '<div style="font-size:13px;color:var(--ink3);font-weight:700;margin-bottom:10px">牛津自然拼读世界 2-5 级，默认全选</div>' +
+      '<div class="card"><div class="sec-title" style="margin-top:0"><span class="em">🎯</span>Study range</div>' +
+        '<div style="font-size:13px;color:var(--ink3);font-weight:700;margin-bottom:10px">Oxford Phonics World Levels 2-5, all on by default</div>' +
         '<div class="chips">' + lvlChips + '</div></div>' +
 
-      '<div class="card"><div class="sec-title" style="margin-top:0"><span class="em">📚</span>词库统计</div>' +
-        '<div class="stat-grid"><div><div class="sn">' + WORDS.length + '</div><div class="sl2">单词总数</div></div>' + bankStat + '</div>' +
-        '<div style="font-size:12px;color:var(--ink3);font-weight:700;margin-top:10px">各拼读级别：' +
-        [2, 3, 4, 5].map(function (L) { return L + '级 ' + (D.stats.byLevel[L] || 0) + ' 词'; }).join(' · ') + '</div></div>' +
+      '<div class="card"><div class="sec-title" style="margin-top:0"><span class="em">📚</span>Word bank stats</div>' +
+        '<div class="stat-grid"><div><div class="sn">' + WORDS.length + '</div><div class="sl2">Total words</div></div>' + bankStat + '</div>' +
+        '<div style="font-size:12px;color:var(--ink3);font-weight:700;margin-top:10px">By level: ' +
+        [2, 3, 4, 5].map(function (L) { return 'L' + L + ' ' + (D.stats.byLevel[L] || 0); }).join(' · ') + '</div></div>' +
 
-      '<div class="card"><div class="sec-title" style="margin-top:0"><span class="em">🗂</span>数据管理</div>' +
-        '<div class="set-row"><div class="sl"><b>今天重新开始</b><span>清空今天的学习记录，重新安排任务</span></div>' +
-        '<button class="btn sm ghost" data-act="resetToday">重置今天</button></div>' +
-        '<div class="set-row"><div class="sl"><b>清空全部学习进度</b><span>单词记录、错题库都会被清空</span></div>' +
-        '<button class="btn sm danger" data-act="resetAll">全部清空</button></div>' +
-        '<div class="set-row"><div class="sl"><b>应用版本</b><span>' + (window.__SW_VER || 'v1') + ' · 更新后如果看不到新版，点这里</span></div>' +
-        '<button class="btn sm ghost" data-act="forceUpdate">检查更新</button></div>' +
+      '<div class="card"><div class="sec-title" style="margin-top:0"><span class="em">🗂</span>Data</div>' +
+        '<div class="set-row"><div class="sl"><b>Restart today</b><span>Clear today\'s record and reshuffle</span></div>' +
+        '<button class="btn sm ghost" data-act="resetToday">Reset today</button></div>' +
+        '<div class="set-row"><div class="sl"><b>Reset everything</b><span>All progress and mistakes will be cleared</span></div>' +
+        '<button class="btn sm danger" data-act="resetAll">Clear all</button></div>' +
+        '<div class="set-row"><div class="sl"><b>App version</b><span>' + (window.__SW_VER || 'v1') + ' · tap to load the latest version</span></div>' +
+        '<button class="btn sm ghost" data-act="forceUpdate">Check for update</button></div>' +
       '</div>' +
       '<div style="text-align:center;font-size:12px;color:var(--ink3);font-weight:700;padding:16px 0 4px">' +
-        '💚 词库来自《牛津自然拼读世界》2-5 级自拼规律<br>每天一点点，拼读越来越顺</div>';
+        '💚 Word lists from Oxford Phonics World Levels 2-5<br>A little each day makes blending easier</div>';
 
     var ni = $('#nameInput');
-    if (ni) ni.oninput = function () { S.cfg.name = this.value.trim() || '宝贝'; write(K.cfg, S.cfg); applyUI(); };
+    if (ni) ni.oninput = function () { S.cfg.name = this.value.trim() || 'Buddy'; write(K.cfg, S.cfg); applyUI(); };
     var vs = $('#voiceSel');
-    if (vs) vs.onchange = function () { S.cfg.voice = this.value; chosen = null; loadVoices(); write(K.cfg, S.cfg); toast('音色已更新'); };
+    if (vs) vs.onchange = function () { S.cfg.voice = this.value; chosen = null; loadVoices(); write(K.cfg, S.cfg); toast('Voice updated'); };
     var rr = $('#rateRange');
     if (rr) rr.onchange = function () { S.cfg.rate = +this.value; write(K.cfg, S.cfg); speak('cake'); };
   }
   function forceUpdate() {
-    toast('正在更新…');
+    toast('Updating…');
     (function () {
       var ps = [];
       if (window.caches) ps.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }));
@@ -1128,7 +1140,7 @@
     if (a === 'closeCelebrate') { hideCelebrate(); RENDER[S.tab](); return; }
     if (a === 'step') {
       var n = +t.getAttribute('data-step');
-      if (n > S.lrn.step + 1) { toast('先把这一步完成吧～'); return; }
+      if (n > S.lrn.step + 1) { toast('Finish this step first'); return; }
       S.lrn.step = n;
       if (n === 1 && !S.lrn.readSpokenOnce) { S.lrn.readSpokenOnce = true; var w0 = curWord(); if (w0) setTimeout(function () { speak(w0.w); }, 240); }
       renderLearn();
@@ -1137,8 +1149,8 @@
     if (a === 'nextWord') { finishWord(false); return; }
     if (a === 'mic') { if (S.lrn.recording) finishRec(); else startRec(); return; }
     if (a === 'replay') {
-      if (S.lrn.lastRecordURL) { var au = new Audio(S.lrn.lastRecordURL); au.play().catch(function () { toast('暂时放不出来，再录一次吧'); }); }
-      else toast('还没有录音哦');
+      if (S.lrn.lastRecordURL) { var au = new Audio(S.lrn.lastRecordURL); au.play().catch(function () { toast('Could not play it — try recording again'); }); }
+      else toast('No recording yet');
       return;
     }
     if (a === 'playWord') { var w1 = curWord(); if (w1) speak(w1.w); return; }
@@ -1162,7 +1174,7 @@
     if (a === 'newRound') { startRound(); return; }
     if (a === 'pickL') { pickL(+t.getAttribute('data-i')); return; }
     if (a === 'pickR') { pickR(+t.getAttribute('data-i')); return; }
-    if (a === 'dropWrong') { dropWrong(t.getAttribute('data-w')); renderWrong(); toast('已经掌握啦，真棒！'); return; }
+    if (a === 'dropWrong') { dropWrong(t.getAttribute('data-w')); renderWrong(); toast('Mastered — great job!'); return; }
     if (a === 'daily') {
       S.cfg.daily = Math.max(5, Math.min(15, S.cfg.daily + (+t.getAttribute('data-v'))));
       S.plan = null; write(K.cfg, S.cfg); renderSet();
@@ -1175,7 +1187,7 @@
     if (a === 'toggleLevel') {
       var L2 = +t.getAttribute('data-v');
       var ix = S.cfg.levels.indexOf(L2);
-      if (ix >= 0) { if (S.cfg.levels.length <= 1) { toast('至少留一个级别哦'); return; } S.cfg.levels.splice(ix, 1); }
+      if (ix >= 0) { if (S.cfg.levels.length <= 1) { toast('Keep at least one level'); return; } S.cfg.levels.splice(ix, 1); }
       else S.cfg.levels.push(L2);
       S.cfg.levels.sort();
       S.plan = null;
@@ -1186,19 +1198,19 @@
     if (a === 'testVoice') { speak('cake'); return; }
     if (a === 'testVoice2') { speak('I want a cake for my birthday.'); return; }
     if (a === 'resetToday') {
-      if (!confirm('清空今天的学习记录，重新安排今天的单词？')) return;
+      if (!confirm('Clear today’s record and reshuffle the words?')) return;
       S.plan = null; delete S.hist[todayStr()];
       write(K.plan, S.plan); write(K.hist, S.hist);
       S.lrn = { q: [], i: 0, step: 0, pz: null, score: null, transcript: '' };
-      renderSet(); paintBadge(); toast('今天的任务已重置');
+      renderSet(); paintBadge(); toast('Today’s tasks reset');
       return;
     }
     if (a === 'resetAll') {
-      if (!confirm('确定清空全部学习进度和错题库吗？这个操作不能撤销。')) return;
+      if (!confirm('Clear ALL progress and the mistake box? This cannot be undone.')) return;
       S.prog = {}; S.hist = {}; S.wrong = {}; S.plan = null;
       write(K.prog, S.prog); write(K.hist, S.hist); write(K.wrong, S.wrong); write(K.plan, null);
       S.lrn = { q: [], i: 0, step: 0, pz: null, score: null, transcript: '' };
-      paintBadge(); renderSet(); toast('已经全部清空，重新开始啦');
+      paintBadge(); renderSet(); toast('Everything cleared — starting fresh');
       return;
     }
     if (a === 'forceUpdate') { forceUpdate(); return; }
@@ -1290,10 +1302,10 @@
       var d = document.getElementById('v-dash');
       if (d) {
         d.classList.add('on');
-        d.innerHTML = '<div class="card" style="border-color:#FFD9D9"><b>😢 页面出了点小问题</b>' +
+        d.innerHTML = '<div class="card" style="border-color:#FFD9D9"><b>😢 Something went wrong</b>' +
           '<pre style="white-space:pre-wrap;font-size:12px;color:#E04C4C;margin-top:8px">' +
           ((err && (err.stack || err.message)) || err) + '</pre>' +
-          '<div class="btn-row" style="margin-top:10px"><button class="btn sm soft" data-act="forceUpdate">重新加载</button></div></div>';
+          '<div class="btn-row" style="margin-top:10px"><button class="btn sm soft" data-act="forceUpdate">Reload</button></div></div>';
       }
       if (window.console) console.error(err);
     }
