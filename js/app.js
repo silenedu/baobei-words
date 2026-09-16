@@ -81,10 +81,31 @@
     ['#FFE9A8', '#FFC46B'], ['#BDF5E4', '#7BE8C6']
   ];
   function accent(w) { var i = (w && typeof w.i === 'number') ? w.i : 0; return ACCENTS[Math.abs(i) % ACCENTS.length]; }
+  /* 少数单词用 emoji 表达不准确（如 lake 没有专用 emoji）→ 用内联小插画代替 */
+  var PIC_ART = {
+    lake: '<svg class="pic-svg" viewBox="0 0 120 120" aria-hidden="true">' +
+      '<rect width="120" height="120" rx="18" fill="#CFEFFF"/>' +
+      '<circle cx="89" cy="27" r="12" fill="#FFD84D"/>' +
+      '<path d="M2 70 L28 42 L54 70 Z" fill="#8FD98E"/>' +
+      '<path d="M44 70 L70 38 L100 70 Z" fill="#5CB76F"/>' +
+      '<path d="M0 70 H120 V102 A18 18 0 0 1 102 120 H18 A18 18 0 0 1 0 102 Z" fill="#58C6EF"/>' +
+      '<path d="M0 70 q30 8 60 0 t60 0 v9 q-30 8 -60 0 t-60 0 Z" fill="#8FE0FF"/>' +
+      '<path d="M20 93 q8 5 16 0" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round"/>' +
+      '<path d="M74 105 q8 5 16 0" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round"/>' +
+      '<path d="M48 85 q7 4 14 0" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round"/>' +
+      '</svg>'
+  };
+  /* 取一个词的“图片”：优先自定义插画，否则 emoji（入参可为 word 对象或 id 字符串） */
+  function picVisual(w) {
+    var key = (typeof w === 'string') ? w : (w && w.w);
+    if (key && PIC_ART[key]) return PIC_ART[key];
+    if (w && typeof w === 'object') return w.e || '⭐';
+    return '⭐';
+  }
   function picCard(w, extraCls) {
     var a = accent(w);
     return '<div class="pic-card ' + (extraCls || '') + '" style="--a:' + a[0] + ';--b:' + a[1] + '">' +
-      '<span class="emo">' + w.e + '</span>' +
+      '<span class="emo">' + picVisual(w) + '</span>' +
       '<button class="spk" data-act="speak" data-text="' + esc(w.w) + '" aria-label="read">🔊</button>' +
       '</div>';
   }
@@ -99,7 +120,7 @@
   function wordCardHTML(w, opts) {
     opts = opts || {};
     return '<div class="wcard">' +
-      '<div class="wc-pic" style="--a:' + accent(w)[0] + ';--b:' + accent(w)[1] + '">' + w.e + '</div>' +
+      '<div class="wc-pic" style="--a:' + accent(w)[0] + ';--b:' + accent(w)[1] + '">' + picVisual(w) + '</div>' +
       '<div class="wc-main">' +
         '<div class="wc-word">' + lettersHTML(w, 'wc-big') + '<button class="spk-line" data-act="speak" data-text="' + esc(w.w) + '">🔊</button></div>' +
         '<div class="wc-meta"><span class="pill pos">' + esc(w.ps) + '</span><span class="pill pat">' + esc(w.p) + '</span>' +
@@ -455,39 +476,43 @@
       '<div class="cal-grid">' + wd + cells + '</div>' +
       '<div style="font-size:12px;color:var(--ink3);font-weight:800;text-align:center;margin-top:8px">Tap a date to see its words · green dot = studied</div>';
 
-    var mistakesCard = (wrongN ? '<div class="card" style="display:flex;align-items:center;gap:12px">' +
+    var mistakesCard = (wrongN ? '<div class="card mcard-mistakes" style="display:flex;align-items:center;gap:12px">' +
         '<div style="font-size:34px">💡</div><div style="flex:1"><b>' + wrongN + ' words need another look</b>' +
         '<div style="font-size:12px;color:var(--ink3);font-weight:700">Words missed in the games are saved here</div></div>' +
         '<button class="btn sm soft" data-act="goWrong">Review</button></div>'
-        : '<div class="card"><div class="empty"><span class="big">🎉</span>No mistakes yet — great job!</div></div>');
+        : '<div class="card mcard-mistakes"><div class="empty"><span class="big">🎉</span>No mistakes yet — great job!</div></div>');
     var barsPanel = '<div class="sec-title"><span class="em">📈</span>Last 7 days</div><div class="card">' + bars + '</div>';
     var calPanel = '<div class="sec-title"><span class="em">🗓</span>Study calendar</div><div class="card">' + cal + '</div>';
+    // 顺序：今日进度 → 今日统计 → 总览 → 错题 → 历史图表/日历（放最后）
     $('#v-dash').innerHTML =
       '<div class="p-hero">' + hero + '</div>' +
-      '<div class="p-bars">' + barsPanel + '</div>' +
       '<div class="p-tiles">' + tiles + '</div>' +
-      '<div class="p-cal">' + calPanel + '</div>' +
       '<div class="p-mini">' + mini + '</div>' +
-      '<div class="p-mistakes">' + mistakesCard + '</div>';
+      '<div class="p-mistakes">' + mistakesCard + '</div>' +
+      '<div class="p-bars">' + barsPanel + '</div>' +
+      '<div class="p-cal">' + calPanel + '</div>';
   }
 
   /* ============ 单词列表弹层 ============ */
+  /* 列表统一转成 id 字符串（dueList 返回的是 word 对象） */
+  function idsOf(list) {
+    return (list || []).map(function (x) { return (x && typeof x === 'object') ? x.w : x; }).filter(Boolean);
+  }
   function listWords(kind, date) {
     date = date || todayStr();
     if (kind === 'new' || kind === 'review') {
       var rec = S.hist[date] || { new: [], review: [] };
       var ids = (kind === 'new' ? rec.new : rec.review) || [];
-      return { ids: ids, label: 'New words' };
+      return { ids: idsOf(ids), label: 'New words' };
     }
     if (kind === 'review-today' || kind === 'due') {
-      var dueIds = dueList(todayStr());
-      return { ids: dueIds, label: 'Words to review' };
+      return { ids: idsOf(dueList(todayStr())), label: 'Words to review' };
     }
     if (kind === 'learned' || kind === 'total') {
-      return { ids: Object.keys(S.prog), label: 'All learned words' };
+      return { ids: idsOf(Object.keys(S.prog)), label: 'All learned words' };
     }
     if (kind === 'wrong' || kind === 'mistakes') {
-      return { ids: Object.keys(S.wrong), label: 'Mistake box' };
+      return { ids: idsOf(Object.keys(S.wrong)), label: 'Mistake box' };
     }
     return { ids: [], label: '' };
   }
@@ -620,13 +645,9 @@
         '<span class="pat-badge">' + esc(w.p) + '</span>' +
         '<span class="pill pos">' + esc(w.ps) + '</span>' +
         (it && !it.isNew ? '<span class="pill rev">Review</span>' : '<span class="pill news">New</span>') + '</div>' +
-      '<div style="font-size:13px;color:var(--ink2);font-weight:800;margin:2px 2px 0">🧠 ' + esc(w.pTip) + '</div>' +
+      '<div style="font-size:15px;color:var(--ink2);font-weight:800;margin:2px 2px 0">💡 ' + esc(w.pTip) + '</div>' +
       defHTML(w) + exHTML(w) +
-      '<div class="btn-row" style="margin-top:16px">' +
-        '<button class="btn soft" data-act="speak" data-text="' + esc(w.w) + '">🔊 Read word</button>' +
-        '<button class="btn ghost" data-act="speak" data-text="' + esc(w.w) + '" data-rate="0.62">🐢 Slow</button>' +
-      '</div>' +
-      '<div class="btn-row" style="margin-top:12px"><button class="btn wide" data-act="step" data-step="1">I got it, let\'s read →</button></div>' +
+      '<div class="btn-row" style="margin-top:16px"><button class="btn wide" data-act="step" data-step="1">I got it, let\'s read →</button></div>' +
       '</div>';
   }
   /* --- 第二步：读 --- */
@@ -637,7 +658,7 @@
       body = '<div class="mic-wrap">' +
         '<button class="mic' + (S.lrn.recording ? ' rec' : '') + '" data-act="mic">🎤</button>' +
         '<div class="mic-tip">' + (S.lrn.recording ? 'Listening… tap to stop when done' : 'Tap the mic and say the word aloud') + '</div>' +
-        '<div style="font-size:12px;color:var(--ink3);font-weight:700">' + (hasSR ? 'Speak clearly and I\'ll score you' : 'This browser can\'t auto-score — just rate yourself') + '</div>' +
+        '<div style="font-size:13.5px;color:var(--ink3);font-weight:700">' + (hasSR ? 'Speak clearly and I\'ll score you' : 'This browser can\'t auto-score — just rate yourself') + '</div>' +
         (S.lrn.lastRecordURL ? '<button class="btn sm ghost" data-act="replay">▶ Hear my last recording</button>' : '') +
         '</div>' +
         (!hasSR ? '<div class="btn-row" style="margin-top:8px">' +
@@ -658,7 +679,7 @@
         '<button class="btn sm soft" data-act="speak" data-text="' + esc(w.w) + '">🔊 Listen</button>' +
         '<button class="btn sm ghost" data-act="speak" data-text="' + esc(w.w) + '" data-rate="0.62">🐢 Slow</button>' +
       '</div>' +
-      '<div style="text-align:center;font-size:13px;color:var(--ink3);font-weight:800;margin-top:10px">' + esc(w.d) + '</div>' +
+      '<div style="text-align:center;font-size:15px;color:var(--ink3);font-weight:800;margin-top:10px">' + esc(w.d) + '</div>' +
       body + '</div>';
   }
   function paintScore(w) {
@@ -832,18 +853,6 @@
       d: matchDef(id) || '', x: '', z: '', banks: []
     };
   }
-  /* 填空 / 组合 切换按钮 */
-  function modeToggleHTML() {
-    var pz = getPz();
-    if (!pz) return '';
-    var m = pz.mode, can = canCombine(pz.w);
-    return '<div class="mode-seg">' +
-      '<span class="ms-lab">Spelling</span>' +
-      '<button class="ms-btn' + (m === 'fill' ? ' on' : '') + '" data-act="spellMode" data-v="fill">✏️ Fill</button>' +
-      '<button class="ms-btn' + (m === 'combine' ? ' on' : '') + (can ? '' : ' off') + '" data-act="spellMode" data-v="combine"' +
-        (can ? '' : ' disabled') + '>🧱 Combine</button>' +
-      '</div>';
-  }
   function buildPuzzle(w) {
     var mode = resolveMode(w);
     var slots = [], tiles = [], isChunk = (mode === 'combine');
@@ -899,7 +908,6 @@
       return '<button class="' + cls + '" data-act="tile" data-i="' + i + '">' + esc(t.isChunk ? t.ch : disp(t.ch)) + '</button>';
     }).join('');
     return spellPromptHTML(w) +
-      modeToggleHTML() +
       '<div class="fill-hint">' + tip + '</div>' +
       '<div class="slots">' + slots + '</div>' +
       '<div class="tiles">' + tiles + '</div>';
@@ -1050,7 +1058,7 @@
   }
   function matchInfo(id) {
     var it = byId[id];
-    var e = (it && it.e) ? it.e : '';
+    var e = it ? picVisual(it) : '';
     var d = (it && it.d) ? it.d : ((window.PWBanks && window.PWBanks.words[id] && window.PWBanks.words[id][0]) || '');
     return { w: id, e: e, d: d };
   }
@@ -1415,14 +1423,6 @@
       renderMatch();
       return;
     }
-    if (a === 'spellMode') {
-      S.cfg.spellMode = t.getAttribute('data-v') || 'auto';
-      write(K.cfg, S.cfg);
-      var pzc = getPz();
-      if (pzc) setPz(buildPuzzle(pzc.w));
-      puzRender();
-      return;
-    }
     if (a === 'mic') {
       if (S.lrn.recording) { finishRec(); return; }
       // "Read again" 路径: 重置评分/识别结果, 启动录音, 并切回大话筒视图
@@ -1469,7 +1469,13 @@
     }
     if (a === 'mode') { S.cfg.mode = t.getAttribute('data-v'); write(K.cfg, S.cfg); renderSet(); return; }
     if (a === 'setAlpha') { S.cfg.alpha = t.getAttribute('data-v') === '1'; write(K.cfg, S.cfg); applyUI(); renderSet(); return; }
-    if (a === 'setSpellMode') { S.cfg.spellMode = t.getAttribute('data-v') || 'auto'; write(K.cfg, S.cfg); renderSet(); return; }
+    if (a === 'setSpellMode') {
+      S.cfg.spellMode = t.getAttribute('data-v') || 'auto';
+      write(K.cfg, S.cfg);
+      S.lrn.pz = null; S.sp.pz = null;      // 重建拼图，让新模式下次生效
+      renderSet();
+      return;
+    }
     if (a === 'wordfont') { S.cfg.wordfont = t.getAttribute('data-v'); write(K.cfg, S.cfg); applyUI(); renderSet(); return; }
     if (a === 'toggleLevel') {
       var L2 = +t.getAttribute('data-v');
