@@ -229,13 +229,20 @@ html[data-ui="phone"] .nav{max-width:560px;margin:0 auto}
 .stage{animation:pop .3s ease both}
 
 .pic-card{
-  position:relative;border-radius:var(--r-xl);aspect-ratio:16/10;display:grid;place-items:center;
+  position:relative;border-radius:var(--r-xl);aspect-ratio:16/10;display:block;
   background:linear-gradient(150deg,var(--a,#B6F04A),var(--b,#7BE8C6));
   border:3px solid #fff;box-shadow:var(--shadow-lift);overflow:hidden;
 }
-.pic-card .emo{align-self:stretch;justify-self:stretch;display:flex;align-items:center;justify-content:center;font-size:clamp(84px,25vw,150px);line-height:1;filter:drop-shadow(0 8px 10px rgba(0,0,0,.15));animation:float 3.6s ease-in-out infinite}
-.pic-card .emo .pic-svg{height:72%;width:auto;aspect-ratio:1/1;max-height:240px}
-@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+/* 居中不依赖 flex/grid（iOS Safari 上 grid 拉伸 + 文本行盒会顶到上沿）：
+   直接用 absolute + transform 把图形钉在卡片正中，所有引擎行为一致 */
+.pic-card .emo{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  font-size:clamp(84px,25vw,150px);line-height:1;
+  filter:drop-shadow(0 8px 10px rgba(0,0,0,.15));
+  animation:emoFloat 3.6s ease-in-out infinite;
+}
+.pic-card .emo .pic-svg{width:clamp(120px,34vw,220px);height:clamp(120px,34vw,220px)}
+@keyframes emoFloat{0%,100%{transform:translate(-50%,-50%)}50%{transform:translate(-50%,calc(-50% - 9px))}}
 .pic-card .spk{
   position:absolute;right:12px;bottom:12px;width:46px;height:46px;border-radius:50%;
   background:rgba(255,255,255,.95);display:grid;place-items:center;font-size:21px;box-shadow:0 4px 0 rgba(0,0,0,.12)
@@ -243,6 +250,7 @@ html[data-ui="phone"] .nav{max-width:560px;margin:0 auto}
 .pic-card .spk:active{transform:translateY(2px)}
 .pic-card.small-pic{aspect-ratio:1;border-radius:22px}
 .pic-card.small-pic .emo{font-size:46px;animation:none;filter:none}
+.pic-card.small-pic .emo .pic-svg{width:64px;height:64px}
 /* 自定义插画（emoji 表达不够准确的词，如 lake） */
 .pic-svg{display:block;width:1.55em;height:1.55em}
 .pic-card.small-pic .spk{width:32px;height:32px;font-size:14px;right:6px;bottom:6px}
