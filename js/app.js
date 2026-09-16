@@ -1107,7 +1107,8 @@
     pz.bad = bad;
     pz.tries++;
     sBad();
-    if (puzCtx === 'spell' && pz.tries >= 2 && !pz.wrongMarked) { pz.wrongMarked = true; addWrong(w); S.sp.wrong++; }
+    /* 只要拼错一次就进错题库（今日学习第三步 与 拼写游戏 一致） */
+    if (!pz.wrongMarked) { pz.wrongMarked = true; addWrong(w); if (puzCtx === 'spell') S.sp.wrong++; }
     puzRender();
     setTimeout(function () {
       var p = getPz();
@@ -1155,8 +1156,8 @@
     var w = learnWord(it.id);
     if (!w) { S.lrn.i++; S.lrn.step = 0; renderLearn(); return; }
     var pz = S.lrn.pz;
-    var bad = mistakes || (pz && pz.tries >= 2);
-    if (bad) addWrong(w);
+    var bad = mistakes || !!(pz && pz.wrongMarked);
+    if (bad && !(pz && pz.wrongMarked)) addWrong(w);   // 拼写时已加过错题，避免重复计数
     if (it.isNew) markToday(w, true); else markToday(w, false);
     recordProg(w, bad);
     S.lrn.i++;
