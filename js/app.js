@@ -13,7 +13,7 @@
   var K = { cfg: 'pw_cfg_v1', prog: 'pw_prog_v1', plan: 'pw_plan_v1', hist: 'pw_hist_v1', wrong: 'pw_wrong_v1' };
   var DEFAULT_CFG = {
     name: 'Buddy', daily: 8, mode: 'en', voice: '', rate: 0.85, ex: true,
-    levels: [2, 3, 4, 5], alpha: true, wordfont: 'play', sound: true
+    levels: [2, 3, 4, 5], alpha: true, wordfont: 'play', sound: true, spellMode: 'auto'
   };
   function read(key, def) {
     try { var v = localStorage.getItem(key); return v ? JSON.parse(v) : def; } catch (e) { return def; }
@@ -30,7 +30,8 @@
     dashDate: todayStr(),
     cal: null,
     lrn: { q: [], i: 0, step: 0, tries: 0, pz: null, rec: null, score: null, transcript: '', srdone: false },
-    m: { bank: 'today', left: [], right: [], selL: null, selR: null, done: 0, wrong: 0, total: 0, busy: false, finished: false },
+    m: { bank: 'today', game: 'match', left: [], right: [], selL: null, selR: null, done: 0, wrong: 0, total: 0, busy: false, finished: false },
+    sp: { q: [], i: 0, pz: null, done: 0, wrong: 0, finished: false },
     eff: 'phone'
   };
   if (!S.cfg.levels || !S.cfg.levels.length) S.cfg.levels = [2, 3, 4, 5];
@@ -79,7 +80,7 @@
     ['#FFB3C8', '#FF8FB1'], ['#C9BCFF', '#B39DFF'], ['#A9E8FF', '#7BC8FF'],
     ['#FFE9A8', '#FFC46B'], ['#BDF5E4', '#7BE8C6']
   ];
-  function accent(w) { return ACCENTS[w.i % ACCENTS.length]; }
+  function accent(w) { var i = (w && typeof w.i === 'number') ? w.i : 0; return ACCENTS[Math.abs(i) % ACCENTS.length]; }
   function picCard(w, extraCls) {
     var a = accent(w);
     return '<div class="pic-card ' + (extraCls || '') + '" style="--a:' + a[0] + ';--b:' + a[1] + '">' +
@@ -396,7 +397,7 @@
       '<div class="hs">' + (isToday ? 'Done ' + planDone + ' / ' + planTotal + ' · New ' + plan.doneNew.length + ' · Review ' + plan.doneReview.length
         : 'New ' + doneN + ' · Review ' + doneR) + '</div>' +
       '<button class="btn hbtn" data-act="' + (isToday ? 'goLearn' : 'backToday') + '">' +
-      (isToday ? (planDone >= planTotal && planTotal ? 'Play a match 🧩' : 'Start learning 📚') : 'Back to today') + '</button></div></div>';
+      (isToday ? (planDone >= planTotal && planTotal ? 'Play a game 🎮' : 'Start learning 📚') : 'Back to today') + '</button></div></div>';
 
     var tiles = '<div class="dash-tiles">' +
       '<button class="tile-btn new' + (doneN ? '' : ' off') + '" data-act="openList" data-kind="new" data-date="' + date + '">' +
@@ -456,7 +457,7 @@
 
     var mistakesCard = (wrongN ? '<div class="card" style="display:flex;align-items:center;gap:12px">' +
         '<div style="font-size:34px">💡</div><div style="flex:1"><b>' + wrongN + ' words need another look</b>' +
-        '<div style="font-size:12px;color:var(--ink3);font-weight:700">Words missed in the match game are saved here</div></div>' +
+        '<div style="font-size:12px;color:var(--ink3);font-weight:700">Words missed in the games are saved here</div></div>' +
         '<button class="btn sm soft" data-act="goWrong">Review</button></div>'
         : '<div class="card"><div class="empty"><span class="big">🎉</span>No mistakes yet — great job!</div></div>');
     var barsPanel = '<div class="sec-title"><span class="em">📈</span>Last 7 days</div><div class="card">' + bars + '</div>';
@@ -552,6 +553,7 @@
     return it ? byId[it.id] : null;
   }
   function renderLearn() {
+    puzCtx = 'learn';
     var v = $('#v-learn');
     var plan = ensurePlan();
     var planTotal = plan.newIds.length + plan.reviewIds.length;
@@ -607,7 +609,7 @@
       '<h2 style="font-size:23px;font-weight:900;margin-top:6px">All done for today!</h2>' +
       '<p style="color:var(--ink2);font-weight:700;margin-top:8px">' + h.new.length + ' new · ' + h.review.length + ' reviewed</p>' +
       '<div class="btn-row" style="margin-top:18px">' +
-      '<button class="btn" data-act="goMatch">Play the match game 🧩</button>' +
+      '<button class="btn" data-act="goMatch">Play a game 🎮</button>' +
       '<button class="btn ghost" data-act="openList" data-kind="new" data-date="' + todayStr() + '">See today\'s cards</button></div></div>';
   }
   /* --- 第一步：学 --- */
@@ -778,11 +780,73 @@
       renderLearn();
     }, 420);
   }
-  /* --- 第三步：拼 --- */
+  /* --- 拼写引擎（今日学习·第三步 与 拼写游戏 共用） --- */
   var CHUNK_POOL = ['ay', 'ai', 'ee', 'ea', 'oa', 'ow', 'oo', 'ou', 'oi', 'oy', 'ar', 'or', 'er', 'ir', 'ur', 'sh', 'ch', 'th', 'igh', 'ue', 'ew', 'oo', 'oo'];
   var LETTER_POOL = 'bcdfghjklmnprstvwz'.split('');
+  var puzCtx = 'learn';                       // 当前拼图属于哪个视图：'learn' | 'spell'
+  function getPz() { return puzCtx === 'spell' ? S.sp.pz : S.lrn.pz; }
+  function setPz(v) { if (puzCtx === 'spell') S.sp.pz = v; else S.lrn.pz = v; }
+  function puzRender() { if (puzCtx === 'spell') renderSpell(); else renderLearn(); }
+
+  /* 能否用「组合拼写」：字母块里有长度 > 1 的块（如 ay / ee / igh） */
+  function canCombine(w) { return !!(w && w.chunks && w.chunks.some(function (c) { return c.length > 1; })); }
+  /* 实际生效的拼写模式：auto = 按单词本身，否则尊重用户选择（不能组合的词回落填空） */
+  function resolveMode(w) {
+    var m = S.cfg.spellMode || 'auto';
+    if (m === 'combine') return canCombine(w) ? 'combine' : 'fill';
+    if (m === 'fill') return 'fill';
+    return (w && w.mode === 'combine') ? 'combine' : 'fill';
+  }
+  /* 把单词切成字母块：优先匹配常见字母组合（ai/ay/ee/ow/sh/ch...），否则单字母 */
+  var SPELL_TEAMS = ['igh', 'air', 'ear', 'ure', 'our', 'ous', 'tch', 'dge', 'are',
+    'ai', 'ay', 'ee', 'ea', 'oa', 'ow', 'oo', 'ou', 'oi', 'oy', 'au', 'aw', 'al', 'ar', 'or',
+    'er', 'ir', 'ur', 'sh', 'ch', 'th', 'wh', 'ph', 'ck', 'ng', 'nk', 'qu', 'gh',
+    'bl', 'br', 'cl', 'cr', 'dr', 'fl', 'fr', 'gl', 'gr', 'pl', 'pr', 'sc', 'sk', 'sl',
+    'sm', 'sn', 'sp', 'st', 'sw', 'tr', 'tw'];
+  function chunkWord(s) {
+    var out = [], i = 0;
+    while (i < s.length) {
+      var m = null;
+      for (var k = 0; k < SPELL_TEAMS.length; k++) {
+        var t = SPELL_TEAMS[k];
+        if (s.substr(i, t.length) === t) { m = t; break; }
+      }
+      if (m) { out.push(m); i += m.length; } else { out.push(s.charAt(i)); i++; }
+    }
+    return out;
+  }
+  /* 把任意词库里的单词转成可拼写的对象（自拼词库直接返回；剑桥全量词库现场切字母块） */
+  function spellWord(id) {
+    var w = byId[id];
+    if (w && /^[a-z]+$/i.test(w.w)) return w;
+    if (!/^[a-z]+$/i.test(String(id || ''))) return null;
+    var letters = String(id).toLowerCase();
+    var chunks = chunkWord(letters);
+    var hasTeam = chunks.some(function (c) { return c.length > 1; });
+    var h = [];
+    for (var i = 0; i < letters.length; i++) if (i === 0 || 'aeiou'.indexOf(letters.charAt(i)) >= 0) h.push(i);
+    if (h.length >= letters.length) h = [0];
+    return {
+      i: 0, w: letters, cn: '', e: (byId[id] && byId[id].e) || '🔤', L: 0, p: '', pTip: '',
+      chunks: chunks, hc: [], h: h, pat: '', mode: hasTeam ? 'combine' : 'fill', ps: '',
+      d: matchDef(id) || '', x: '', z: '', banks: []
+    };
+  }
+  /* 填空 / 组合 切换按钮 */
+  function modeToggleHTML() {
+    var pz = getPz();
+    if (!pz) return '';
+    var m = pz.mode, can = canCombine(pz.w);
+    return '<div class="mode-seg">' +
+      '<span class="ms-lab">Spelling</span>' +
+      '<button class="ms-btn' + (m === 'fill' ? ' on' : '') + '" data-act="spellMode" data-v="fill">✏️ Fill</button>' +
+      '<button class="ms-btn' + (m === 'combine' ? ' on' : '') + (can ? '' : ' off') + '" data-act="spellMode" data-v="combine"' +
+        (can ? '' : ' disabled') + '>🧱 Combine</button>' +
+      '</div>';
+  }
   function buildPuzzle(w) {
-    var slots = [], tiles = [], isChunk = (w.mode === 'combine');
+    var mode = resolveMode(w);
+    var slots = [], tiles = [], isChunk = (mode === 'combine');
     if (isChunk) {
       slots = w.chunks.map(function (c) { return { ans: c, given: false, filled: null, isChunk: true }; });
       tiles = w.chunks.slice();
@@ -798,15 +862,27 @@
       tiles = tiles.concat(ex);
     }
     return {
-      w: w, slots: slots,
+      w: w, mode: mode, slots: slots,
       tiles: shuffle(tiles).map(function (ch) { return { ch: ch, used: false, isChunk: isChunk }; }),
-      tries: 0, solved: false, bad: [], okAll: false
+      tries: 0, solved: false, bad: [], okAll: false, wrongMarked: false
     };
   }
-  function stepSpell(w) {
-    if (!S.lrn.pz || S.lrn.pz.w.w !== w.w) { S.lrn.pz = buildPuzzle(w); S.lrn.badFlash = false; }
-    var pz = S.lrn.pz;
-    var tip = w.mode === 'combine'
+  /* 拼写题面：图片 + 英英释义 + 发音按钮 */
+  function spellPromptHTML(w) {
+    return '<div class="sp-top">' +
+      '<div class="sp-pic">' + picCard(w, 'small-pic') + '</div>' +
+      '<div class="sp-info">' +
+        '<div class="def-box" style="margin-top:0"><div class="dline"><span class="k">EN</span>' +
+        '<span>' + esc(w.d) + '</span></div></div>' +
+        '<div class="btn-row" style="margin-top:10px;justify-content:flex-start">' +
+          '<button class="btn sm soft" data-act="speak" data-text="' + esc(w.w) + '">🔊 Listen</button>' +
+          '<button class="btn sm ghost" data-act="speak" data-text="' + esc(w.w) + '" data-rate="0.6">🐢 Slow</button>' +
+        '</div>' +
+      '</div></div>';
+  }
+  function spellBoardHTML(pz) {
+    var w = pz.w;
+    var tip = pz.mode === 'combine'
       ? 'Put the letter blocks in order (' + w.chunks.length + ' blocks)'
       : 'Fill in the missing letters (dashed = empty space)';
     var slots = pz.slots.map(function (s, i) {
@@ -822,21 +898,16 @@
       var cls = 'tile' + (t.used ? ' used' : '') + (t.used && t.ok ? ' ok' : '');
       return '<button class="' + cls + '" data-act="tile" data-i="' + i + '">' + esc(t.isChunk ? t.ch : disp(t.ch)) + '</button>';
     }).join('');
-    return '<div class="stage">' +
-      '<div style="display:flex;gap:12px;align-items:center">' +
-        '<div style="flex:none;width:104px">' + picCard(w, 'small-pic') + '</div>' +
-        '<div style="flex:1;min-width:0">' +
-          '<div class="def-box" style="margin-top:0"><div class="dline"><span class="k">EN</span>' +
-          '<span>' + esc(w.d) + '</span></div></div>' +
-          '<div class="btn-row" style="margin-top:10px;justify-content:flex-start">' +
-            '<button class="btn sm soft" data-act="speak" data-text="' + esc(w.w) + '">🔊 Listen</button>' +
-            '<button class="btn sm ghost" data-act="speak" data-text="' + esc(w.w) + '" data-rate="0.6">🐢 Slow</button>' +
-          '</div>' +
-        '</div>' +
-      '</div>' +
-      '<div class="fill-hint">' + tip + '　·　pattern <b>' + esc(w.p) + '</b></div>' +
+    return spellPromptHTML(w) +
+      modeToggleHTML() +
+      '<div class="fill-hint">' + tip + '</div>' +
       '<div class="slots">' + slots + '</div>' +
-      '<div class="tiles">' + tiles + '</div>' +
+      '<div class="tiles">' + tiles + '</div>';
+  }
+  function stepSpell(w) {
+    if (!S.lrn.pz || S.lrn.pz.w.w !== w.w) { S.lrn.pz = buildPuzzle(w); S.lrn.badFlash = false; }
+    var pz = S.lrn.pz;
+    return '<div class="stage">' + spellBoardHTML(pz) +
       (pz.okAll ? '<div class="btn-row" style="margin-top:16px"><button class="btn" data-act="nextWord">Great, next →</button></div>' : '') +
       '<div class="btn-row" style="margin-top:16px">' +
         '<button class="btn ghost sm" data-act="hint">Give me a hint 💡</button>' +
@@ -845,7 +916,7 @@
       '</div>';
   }
   function tapTile(i) {
-    var pz = S.lrn.pz;
+    var pz = getPz();
     if (!pz || pz.solved) return;
     var t = pz.tiles[i];
     if (!t || t.used) return;
@@ -858,19 +929,21 @@
     checkPuzzle();
   }
   function tapSlot(i) {
-    var pz = S.lrn.pz;
+    var pz = getPz();
     if (!pz || pz.solved) return;
     var s = pz.slots[i];
     if (s.given || !s.filled) return;
     pz.tiles[s.filled.tile].used = false;
     s.filled = null;
     pz.bad = [];
-    renderLearn();
+    puzRender();
   }
   function checkPuzzle() {
-    var pz = S.lrn.pz, w = pz.w;
+    var pz = getPz();
+    if (!pz) return;
+    var w = pz.w;
     var empty = pz.slots.some(function (s) { return !s.given && !s.filled; });
-    if (empty) { renderLearn(); return; }
+    if (empty) { puzRender(); return; }
     var bad = [];
     pz.slots.forEach(function (s, i) {
       if (s.given) return;
@@ -882,18 +955,20 @@
       pz.tiles.forEach(function (t) { if (t.used) t.ok = true; });
       sWin();
       confetti();
-      renderLearn();
-      setTimeout(function () { finishWord(false); }, 1150);
+      puzRender();
+      // 自动进入下一题；若孩子自己点了「Next」按钮，靠 handled 标记避免重复推进
+      pz._t = setTimeout(function () { advanceSolved(pz); }, 1150);
       return;
     }
     pz.bad = bad;
     pz.tries++;
     sBad();
-    renderLearn();
+    if (puzCtx === 'spell' && pz.tries >= 2 && !pz.wrongMarked) { pz.wrongMarked = true; addWrong(w); S.sp.wrong++; }
+    puzRender();
     setTimeout(function () {
-      var p = S.lrn.pz;
-      if (!p) return;
-      p.bad.forEach(function (i) { if (p.slots[i].filled) { p.tiles[p.slots[i].filled.tile].used = false; p.slots[i].filled = null; } });
+      var p = getPz();
+      if (!p || p !== pz) return;
+      p.bad.forEach(function (i) { if (p.slots[i].filled && !p.slots[i].given) { p.tiles[p.slots[i].filled.tile].used = false; p.slots[i].filled = null; } });
       p.bad = [];
       if (p.tries >= 2) {
         var first = -1;
@@ -904,22 +979,29 @@
           toast('No rush — look at this letter block: ' + p.slots[first].ans);
         }
       }
-      renderLearn();
+      puzRender();
     }, 750);
   }
+  /* 拼图完成后推进：自动定时 或 点击 Next，二者只生效一次 */
+  function advanceSolved(pz) {
+    if (!pz || pz.handled) return;
+    pz.handled = true;
+    if (pz === S.sp.pz) { spellAdvance(); return; }
+    if (pz === S.lrn.pz) { finishWord(false); return; }
+    // 已被替换（例如中途切换了游戏/词库）→ 什么也不做
+  }
   function hintPuzzle() {
-    var pz = S.lrn.pz;
+    var pz = getPz();
     if (!pz || pz.solved) return;
     var k = -1;
     for (var i = 0; i < pz.slots.length; i++) if (!pz.slots[i].given && !pz.slots[i].filled) { k = i; break; }
     if (k < 0) { toast('All filled — tap Check to see'); return; }
     var s = pz.slots[k];
-    if (s.isChunk || pz.w.mode === 'combine') {
+    if (s.isChunk || pz.mode === 'combine') {
       for (var j = 0; j < pz.tiles.length; j++) if (!pz.tiles[j].used && pz.tiles[j].ch === s.ans) { pz.tiles[j].used = true; s.filled = { ch: s.ans, tile: j }; break; }
     } else {
       s.filled = { ch: s.ans, fixed: true };
       s.given = true;
-      var t = pz.tiles.filter(function (x) { return !x.used && x.ch === s.ans; })[0];
     }
     checkPuzzle();
   }
@@ -942,7 +1024,7 @@
     if (S.lrn.i >= S.lrn.q.length) {
       var h = S.hist[todayStr()] || { new: [], review: [] };
       celebrate('🏆', 'All words done for today!', h.new.length + ' new · ' + h.review.length + ' reviewed<br>Come back tomorrow to review!',
-        '<button class="btn" data-act="goMatch">Play the match game 🧩</button>' +
+        '<button class="btn" data-act="goMatch">Play a game 🎮</button>' +
         '<button class="btn ghost" data-act="closeCelebrate">All done</button>');
       renderLearn();
     } else {
@@ -996,21 +1078,30 @@
     pick.forEach(function (w) { S.m.pair[w] = true; });
     renderMatch();
   }
-  function renderMatch() {
-    var chips = '<div class="bank-chips">' + BANK_META.map(function (b) {
+  function bankChipsHTML() {
+    return '<div class="bank-chips">' + BANK_META.map(function (b) {
       var n = listForBank(b.id).length;
       return '<button class="chip' + (S.m.bank === b.id ? ' on' : '') + '" data-act="bank" data-b="' + b.id + '">' +
         b.icon + ' ' + b.name + ' <span style="opacity:.7">' + n + '</span></button>';
     }).join('') + '</div>';
-
+  }
+  function gameSeg() {
+    return '<div class="game-seg">' +
+      '<button class="' + (S.m.game === 'match' ? 'on' : '') + '" data-act="game" data-v="match">🧩 Match</button>' +
+      '<button class="' + (S.m.game === 'spell' ? 'on' : '') + '" data-act="game" data-v="spell">✏️ Spell</button>' +
+      '</div>';
+  }
+  function renderMatch() {
+    if (S.m.game === 'spell') return renderSpell();
+    var top = gameSeg() + bankChipsHTML();
     var pool = listForBank(S.m.bank);
     if (pool.length < 2) {
-      $('#v-match').innerHTML = chips + '<div class="card"><div class="empty"><span class="big">🧩</span>' +
+      $('#v-match').innerHTML = top + '<div class="card"><div class="empty"><span class="big">🧩</span>' +
         (S.m.bank === 'wrong' ? 'Your mistake box is empty — you\'re doing great!' : 'This word bank has no words yet') + '</div></div>';
       return;
     }
     if (!S.m.left.length) {
-      $('#v-match').innerHTML = chips + '<div class="card" style="text-align:center">' +
+      $('#v-match').innerHTML = top + '<div class="card" style="text-align:center">' +
         '<div style="font-size:56px">🧩</div><h3 style="font-size:19px;font-weight:900">Match words with their meanings</h3>' +
         '<p style="color:var(--ink2);font-weight:700;font-size:14px;margin-top:8px">Tap a word on the left, then its definition on the right.<br>Wrong answers go to your mistake box for later review.</p>' +
         '<div class="btn-row" style="margin-top:16px"><button class="btn" data-act="newRound">Start a round</button></div></div>';
@@ -1029,10 +1120,73 @@
       var cls = 'mcard def' + (S.m.selR === i ? ' sel' : '') + (w._ok ? ' ok' : '') + (S.m.badR === i ? ' bad' : '');
       return '<button class="' + cls + '" data-act="pickR" data-i="' + i + '"' + (w._ok ? ' disabled' : '') + '>' + esc(w.d) + '</button>';
     }).join('');
-    $('#v-match').innerHTML = chips + head + '<div class="board"><div class="col">' + left + '</div><div class="col">' + right + '</div></div>' +
+    $('#v-match').innerHTML = top + head + '<div class="board"><div class="col">' + left + '</div><div class="col">' + right + '</div></div>' +
       (S.m.finished ? '<div class="match-foot"><button class="btn" data-act="newRound">Play again 🎉</button>' +
         '<button class="btn ghost" data-act="goWrong">See mistakes 💡</button></div>' : '') +
       '<div style="font-size:12px;color:var(--ink3);font-weight:800;text-align:center;margin-top:12px">Tap a word card to hear it 🔊</div>';
+  }
+
+  /* ============ 拼写游戏 ============ */
+  function spellPool() {
+    return listForBank(S.m.bank).filter(function (id) { return !!spellWord(id); });
+  }
+  function startSpellRound() {
+    var pool = spellPool();
+    var n = S.eff === 'pad' ? 6 : 5;
+    S.sp.q = shuffle(pool).slice(0, Math.min(n, pool.length));
+    S.sp.i = 0; S.sp.done = 0; S.sp.wrong = 0; S.sp.finished = false;
+    S.sp.pz = S.sp.q.length ? buildPuzzle(spellWord(S.sp.q[0])) : null;
+    renderSpell();
+  }
+  function spellAdvance() {
+    S.sp.done++;
+    S.sp.i++;
+    S.sp.pz = null;
+    if (S.sp.i >= S.sp.q.length) {
+      S.sp.finished = true;
+      S.sp.pz = null;
+      renderSpell();
+      setTimeout(function () {
+        celebrate('🏆', 'All spelled!', S.sp.done + ' words spelled · ' + S.sp.wrong + ' mistakes',
+          '<button class="btn" data-act="spNew">Play again</button>' +
+          '<button class="btn ghost" data-act="closeCelebrate">Back</button>');
+      }, 360);
+    } else {
+      S.sp.pz = buildPuzzle(spellWord(S.sp.q[S.sp.i]));
+      renderSpell();
+      setTimeout(function () { var cw = S.sp.pz && S.sp.pz.w; if (cw) speak(cw.w); }, 300);
+    }
+  }
+  function renderSpell() {
+    puzCtx = 'spell';
+    var top = gameSeg() + bankChipsHTML();
+    var pool = spellPool();
+    if (!pool.length) {
+      $('#v-match').innerHTML = top + '<div class="card"><div class="empty"><span class="big">✏️</span>' +
+        (S.m.bank === 'wrong' ? 'Your mistake box is empty — you\'re doing great!' : 'No spellable words in this bank yet') + '</div></div>';
+      return;
+    }
+    if (!S.sp.pz) {
+      var startBtn = S.sp.finished ? 'Play again' : 'Start spelling';
+      $('#v-match').innerHTML = top + '<div class="card" style="text-align:center">' +
+        '<div style="font-size:56px">✏️</div><h3 style="font-size:19px;font-weight:900">Spell the word</h3>' +
+        '<p style="color:var(--ink2);font-weight:700;font-size:14px;margin-top:8px">Look at the picture and the meaning, tap 🔊 to listen,<br>then build the word from the letter tiles.<br>Wrong answers go to your mistake box.</p>' +
+        '<div class="btn-row" style="margin-top:16px"><button class="btn" data-act="spNew">' + startBtn + '</button></div></div>';
+      return;
+    }
+    var pz = S.sp.pz, w = pz.w;
+    var head = '<div class="match-head"><span>✏️ Word ' + (S.sp.i + 1) + ' / ' + S.sp.q.length + '</span>' +
+      '<span style="color:#8BC42A">✓ ' + S.sp.done + '</span>' +
+      '<span style="color:#E96C92">✗ ' + S.sp.wrong + '</span>' +
+      '<div class="mh-r"><button class="btn sm ghost" data-act="spNew">Shuffle</button></div></div>';
+    $('#v-match').innerHTML = top + head +
+      '<div class="sp-board' + (pz.okAll ? ' ok' : '') + '"><div class="stage">' + spellBoardHTML(pz) +
+      (pz.okAll ? '<div class="btn-row" style="margin-top:16px"><button class="btn" data-act="spNext">Great, next →</button></div>' : '') +
+      '<div class="btn-row" style="margin-top:16px">' +
+        '<button class="btn ghost sm" data-act="hint">Give me a hint 💡</button>' +
+        '<button class="btn ghost sm" data-act="resetPz">Reset 🔄</button>' +
+      '</div></div></div>' +
+      '<div style="font-size:12px;color:var(--ink3);font-weight:800;text-align:center;margin-top:12px">Tap a tile, then fill the spaces in order</div>';
   }
   function disp2(s) {
     if (!S.cfg.alpha) return s;
@@ -1118,7 +1272,7 @@
       (ids.length ? '<button class="btn sm soft more" style="pointer-events:auto" data-act="goMatchWrong">Practice →</button>' : '') + '</div>';
     if (!ids.length) {
       $('#v-wrong').innerHTML = head + '<div class="card"><div class="empty"><span class="big">🎉</span>' +
-        'Your mistake box is empty — amazing!<br><span style="font-size:13px">Words you miss in the match game show up here</span></div></div>';
+        'Your mistake box is empty — amazing!<br><span style="font-size:13px">Words you miss in the games show up here</span></div></div>';
       return;
     }
     var list = '<div class="wlist">' + ids.map(function (id) { return wrongCardHTML(id); }).join('') + '</div>';
@@ -1157,6 +1311,12 @@
         '<div class="set-row"><div class="sl"><b>Show a as ɑ</b><span>Easier-to-read shape for kids (sound unchanged)</span></div>' +
         '<div class="seg"><button class="' + (c.alpha ? 'on' : '') + '" data-act="setAlpha" data-v="1">On</button>' +
         '<button class="' + (!c.alpha ? 'on' : '') + '" data-act="setAlpha" data-v="0">Off</button></div></div>' +
+        '<div class="set-row"><div class="sl"><b>Spelling mode</b><span>Auto picks per word · Fill = blank letters · Combine = build from blocks</span></div>' +
+        '<div class="seg">' +
+          '<button class="' + ((c.spellMode || 'auto') === 'auto' ? 'on' : '') + '" data-act="setSpellMode" data-v="auto">Auto</button>' +
+          '<button class="' + (c.spellMode === 'fill' ? 'on' : '') + '" data-act="setSpellMode" data-v="fill">Fill</button>' +
+          '<button class="' + (c.spellMode === 'combine' ? 'on' : '') + '" data-act="setSpellMode" data-v="combine">Combine</button>' +
+        '</div></div>' +
         '<div class="set-row"><div class="sl"><b>Letter font</b><span>Playful handwriting suits early learning</span></div>' +
         '<div class="seg"><button class="' + (c.wordfont !== 'plain' ? 'on' : '') + '" data-act="wordfont" data-v="play">Playful</button>' +
         '<button class="' + (c.wordfont === 'plain' ? 'on' : '') + '" data-act="wordfont" data-v="plain">Plain</button></div></div>' +
@@ -1220,8 +1380,18 @@
     }
     if (a === 'start') { startSession(); return; }
     if (a === 'goLearn') { startSession(); return; }
-    if (a === 'goMatch') { hideCelebrate(); startRound(); go('match'); return; }
-    if (a === 'goMatchWrong') { S.m.bank = 'wrong'; startRound(); go('match'); return; }
+    if (a === 'goMatch') {
+      hideCelebrate();
+      if (S.m.game === 'spell') startSpellRound(); else startRound();
+      go('match');
+      return;
+    }
+    if (a === 'goMatchWrong') {
+      S.m.bank = 'wrong';
+      if (S.m.game === 'spell') startSpellRound(); else startRound();
+      go('match');
+      return;
+    }
     if (a === 'goWrong') { hideCelebrate(); go('wrong'); return; }
     if (a === 'closeCelebrate') { hideCelebrate(); RENDER[S.tab](); return; }
     if (a === 'step') {
@@ -1232,7 +1402,27 @@
       renderLearn();
       return;
     }
-    if (a === 'nextWord') { finishWord(false); return; }
+    if (a === 'nextWord') { advanceSolved(S.lrn.pz); return; }
+    if (a === 'spNext') { advanceSolved(S.sp.pz); return; }
+    if (a === 'spNew') { startSpellRound(); return; }
+    if (a === 'game') {
+      var g = t.getAttribute('data-v');
+      if (g !== S.m.game) {
+        S.m.game = g;
+        S.m.left = []; S.m.right = []; S.m.done = 0; S.m.wrong = 0; S.m.selL = S.m.selR = null; S.m.finished = false;
+        S.sp.q = []; S.sp.i = 0; S.sp.pz = null; S.sp.done = 0; S.sp.wrong = 0; S.sp.finished = false;
+      }
+      renderMatch();
+      return;
+    }
+    if (a === 'spellMode') {
+      S.cfg.spellMode = t.getAttribute('data-v') || 'auto';
+      write(K.cfg, S.cfg);
+      var pzc = getPz();
+      if (pzc) setPz(buildPuzzle(pzc.w));
+      puzRender();
+      return;
+    }
     if (a === 'mic') {
       if (S.lrn.recording) { finishRec(); return; }
       // "Read again" 路径: 重置评分/识别结果, 启动录音, 并切回大话筒视图
@@ -1252,7 +1442,7 @@
     if (a === 'tile') { tapTile(+t.getAttribute('data-i')); return; }
     if (a === 'slot') { tapSlot(+t.getAttribute('data-i')); return; }
     if (a === 'hint') { hintPuzzle(); return; }
-    if (a === 'resetPz') { S.lrn.pz = buildPuzzle(curWord()); renderLearn(); return; }
+    if (a === 'resetPz') { var pzr = getPz(); if (pzr) setPz(buildPuzzle(pzr.w)); puzRender(); return; }
     if (a === 'openList') { openList(t.getAttribute('data-kind'), t.getAttribute('data-date')); return; }
     if (a === 'calPrev') { S.cal.m--; if (S.cal.m < 0) { S.cal.m = 11; S.cal.y--; } renderDash(); return; }
     if (a === 'calNext') { S.cal.m++; if (S.cal.m > 11) { S.cal.m = 0; S.cal.y++; } renderDash(); return; }
@@ -1260,7 +1450,11 @@
     if (a === 'backToday') { S.dashDate = todayStr(); renderDash(); return; }
     if (a === 'bank') {
       var b = t.getAttribute('data-b');
-      if (b !== S.m.bank) { S.m.bank = b; S.m.left = []; S.m.right = []; S.m.done = 0; S.m.wrong = 0; S.m.selL = S.m.selR = null; S.m.finished = false; }
+      if (b !== S.m.bank) {
+        S.m.bank = b;
+        S.m.left = []; S.m.right = []; S.m.done = 0; S.m.wrong = 0; S.m.selL = S.m.selR = null; S.m.finished = false;
+        S.sp.q = []; S.sp.i = 0; S.sp.pz = null; S.sp.done = 0; S.sp.wrong = 0; S.sp.finished = false;
+      }
       renderMatch();
       return;
     }
@@ -1275,6 +1469,7 @@
     }
     if (a === 'mode') { S.cfg.mode = t.getAttribute('data-v'); write(K.cfg, S.cfg); renderSet(); return; }
     if (a === 'setAlpha') { S.cfg.alpha = t.getAttribute('data-v') === '1'; write(K.cfg, S.cfg); applyUI(); renderSet(); return; }
+    if (a === 'setSpellMode') { S.cfg.spellMode = t.getAttribute('data-v') || 'auto'; write(K.cfg, S.cfg); renderSet(); return; }
     if (a === 'wordfont') { S.cfg.wordfont = t.getAttribute('data-v'); write(K.cfg, S.cfg); applyUI(); renderSet(); return; }
     if (a === 'toggleLevel') {
       var L2 = +t.getAttribute('data-v');
