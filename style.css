@@ -332,9 +332,8 @@ html[data-ui="phone"] .nav{max-width:560px;margin:0 auto}
   padding:10px 12px;text-align:left;font-weight:700;transition:.16s;line-height:1.35
 }
 .mcard:active{transform:translateY(3px);box-shadow:none}
-.mcard.word{display:flex;flex-direction:row;align-items:center;gap:7px;padding:10px}
-.mcard.word .mw{font-family:var(--font-word);font-size:18px;font-weight:900;letter-spacing:.3px;line-height:1.1}
-.mcard.word .me{font-size:21px;line-height:1}
+.mcard.word{display:flex;flex-direction:row;align-items:center;justify-content:center;gap:7px;padding:10px}
+.mcard.word .mw{font-family:var(--font-word);font-size:20px;font-weight:900;letter-spacing:.3px;line-height:1.1}
 .mcard.def{font-size:18px;line-height:1.45;font-weight:700;color:var(--ink)}
 .mcard.sel{border-color:var(--primary);background:var(--primary-soft);box-shadow:0 0 0 4px rgba(0,194,184,.18)}
 .mcard.ok{border-color:var(--lime-d);background:#EFFCE1;color:#3F7509;opacity:.75;box-shadow:none}
