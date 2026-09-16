@@ -448,12 +448,31 @@
   var RENDER = { dash: renderDash, learn: renderLearn, match: renderMatch, wrong: renderWrong, set: renderSet };
   function go(tab) {
     S.tab = tab;
-    var btns = document.querySelectorAll('.nav-btn');
-    for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('on', btns[i].getAttribute('data-tab') === tab);
-    var views = document.querySelectorAll('.view');
-    for (var j = 0; j < views.length; j++) views[j].classList.toggle('on', views[j].id === 'v-' + tab);
-    RENDER[tab]();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    try {
+      var btns = document.querySelectorAll('.nav-btn');
+      for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('on', btns[i].getAttribute('data-tab') === tab);
+      var views = document.querySelectorAll('.view');
+      for (var j = 0; j < views.length; j++) views[j].classList.toggle('on', views[j].id === 'v-' + tab);
+      if (RENDER[tab]) RENDER[tab]();
+      else showErrBanner('no renderer for tab: ' + tab);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+      /* 渲染出错时把原因显示在目标页里，避免页面看起来“点了没反应” */
+      showErrBanner((err && (err.stack || err.message)) || err);
+      var v = document.getElementById('v-' + tab);
+      if (v) {
+        v.classList.add('on');
+        v.innerHTML = '<div class="card" style="border-color:#FFD9D9"><b>😢 Something went wrong opening this page</b>' +
+          '<pre style="white-space:pre-wrap;font-size:12px;color:#E04C4C;margin-top:8px">' +
+          ((err && (err.stack || err.message)) || err) + '</pre>' +
+          '<div class="btn-row" style="margin-top:10px"><button class="btn sm soft" data-act="forceUpdate">Reload the app</button></div></div>';
+      }
+      if (window.console) console.error(err);
+    }
+  }
+  /* 供监听器使用的安全包装：go 抛错也不至于让后续逻辑中断 */
+  function safeGo(tab) {
+    try { go(tab); } catch (err) { showErrBanner((err && (err.stack || err.message)) || err); }
   }
   function applyUI() {
     var eff = window.innerWidth >= 900 ? 'pad' : 'phone';
@@ -1652,11 +1671,32 @@
   });
   document.addEventListener('click', function (e) {
     var nb = e.target.closest('.nav-btn');
-    if (nb) go(nb.getAttribute('data-tab'));
+    if (!nb) return;
+    safeGo(nb.getAttribute('data-tab'));
   });
+  /* 每个 nav 按钮再挂一个直接监听（双保险：即使委托失效也能切页） */
+  Array.prototype.forEach.call(document.querySelectorAll('.nav-btn'), function (b) {
+    b.addEventListener('click', function () { safeGo(b.getAttribute('data-tab')); });
+  });
+  /* 任何未捕获的 JS 错误都显示成顶部红条（而不是让界面悄悄冻住），方便家长截图反馈 */
+  function showErrBanner(msg) {
+    var b = document.getElementById('errBanner');
+    if (!b) {
+      b = document.createElement('div');
+      b.id = 'errBanner';
+      b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999;background:#E04C4C;color:#fff;' +
+        'font:700 12px/1.4 sans-serif;padding:8px 12px;white-space:pre-wrap;word-break:break-all';
+      b.title = 'Tap to dismiss';
+      b.addEventListener('click', function () { b.parentNode && b.parentNode.removeChild(b); });
+      (document.body || document.documentElement).appendChild(b);
+    }
+    b.textContent = '⚠️ ' + String(msg).slice(0, 300);
+  }
+  window.addEventListener('error', function (e) { showErrBanner((e && e.message) || 'script error'); });
+  window.addEventListener('unhandledrejection', function (e) { showErrBanner((e && e.reason) || 'promise error'); });
   window.addEventListener('resize', function () {
     var eff = window.innerWidth >= 900 ? 'pad' : 'phone';
-    if (eff !== S.eff) { applyUI(); RENDER[S.tab](); }
+    if (eff !== S.eff) { applyUI(); safeGo(S.tab); }
   });
 
   /* ============ 启动 ============ */
