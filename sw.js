@@ -1,5 +1,5 @@
 /* 宝贝背单词小助手 — Service Worker（网络优先，离线可用） */
-const CACHE = 'pw-v15';
+const CACHE = 'pw-v16';
 const ASSETS = [
   './',
   './index.html',
