@@ -452,7 +452,13 @@
       var btns = document.querySelectorAll('.nav-btn');
       for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('on', btns[i].getAttribute('data-tab') === tab);
       var views = document.querySelectorAll('.view');
-      for (var j = 0; j < views.length; j++) views[j].classList.toggle('on', views[j].id === 'v-' + tab);
+      for (var j = 0; j < views.length; j++) {
+        var active = views[j].id === 'v-' + tab;
+        views[j].classList.toggle('on', active);
+        /* 双保险：除 class 外再加 hidden 属性，确保任何引擎下非当前 tab 一律不显示 */
+        if (active) views[j].removeAttribute('hidden');
+        else views[j].setAttribute('hidden', '');
+      }
       if (RENDER[tab]) RENDER[tab]();
       else showErrBanner('no renderer for tab: ' + tab);
       window.scrollTo({ top: 0, behavior: 'smooth' });
