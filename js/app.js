@@ -15,7 +15,8 @@
   var DEFAULT_CFG = {
     name: 'Buddy', daily: 8, mode: 'en', voice: '', rate: 0.85, ex: true,
     levels: [2, 3, 4, 5], banks: BANK_IDS.slice(),
-    alpha: true, wordfont: 'play', sound: true, spellMode: 'auto'
+    alpha: true, wordfont: 'play', sound: true, spellMode: 'auto',
+    voiceEngine: 'auto' // auto | system | offline（离线语音包，适配无系统 TTS 的华为平板）
   };
   function read(key, def) {
     try { var v = localStorage.getItem(key); return v ? JSON.parse(v) : def; } catch (e) { return def; }
@@ -237,11 +238,57 @@
     setTimeout(loadVoices, 800);
     setTimeout(loadVoices, 2000);
   }
-  function speak(text, rate) {
-    if (!ttsSupported()) {
-      toast('This browser can\'t read aloud — try Chrome or Safari');
-      return;
-    }
+  /* 离线语音包：用预生成的真人发音音频，适配无系统 TTS 的华为平板等 */
+  var SPRITE = {
+    ctx: null,
+    buf: null,
+    map: (window.AUDIO && window.AUDIO.map) || {},
+    url: (window.AUDIO && window.AUDIO.url) || 'js/audio-sprite.m4a',
+    loading: false, loaded: false, failed: false
+  };
+  function spriteCtx() {
+    try {
+      if (!SPRITE.ctx) SPRITE.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (SPRITE.ctx.state === 'suspended') SPRITE.ctx.resume();
+      return SPRITE.ctx;
+    } catch (e) { return null; }
+  }
+  function loadSprite(cb) {
+    if (SPRITE.loaded || SPRITE.failed) { if (cb) cb(SPRITE.loaded); return; }
+    if (SPRITE.loading) return;
+    SPRITE.loading = true;
+    try {
+      fetch(SPRITE.url).then(function (r) { return r.arrayBuffer(); }).then(function (ab) {
+        var ctx = spriteCtx();
+        if (!ctx) { SPRITE.failed = true; SPRITE.loading = false; if (cb) cb(false); return; }
+        ctx.decodeAudioData(ab, function (buf) {
+          SPRITE.buf = buf; SPRITE.loaded = true; SPRITE.loading = false; if (cb) cb(true);
+        }, function () { SPRITE.failed = true; SPRITE.loading = false; if (cb) cb(false); });
+      }).catch(function () { SPRITE.failed = true; SPRITE.loading = false; if (cb) cb(false); });
+    } catch (e) { SPRITE.failed = true; SPRITE.loading = false; if (cb) cb(false); }
+  }
+  // 返回 true 表示已安排播放（无论是否命中离线音频）
+  function playSprite(text, rate) {
+    if (!S.cfg.sound) return false;
+    var key = String(text || '').trim().toLowerCase();
+    var seg = SPRITE.map[key];
+    if (!seg) return false; // 该词无离线音频
+    loadSprite(function (ok) {
+      if (!ok || !SPRITE.buf) return;
+      var ctx = spriteCtx(); if (!ctx) return;
+      try {
+        var src = ctx.createBufferSource();
+        src.buffer = SPRITE.buf;
+        src.connect(ctx.destination);
+        src.playbackRate.value = rate || S.cfg.rate || 1;
+        src.start(0, seg[0], seg[1] - seg[0]);
+      } catch (e) {}
+    });
+    return true;
+  }
+
+  var nativeDead = false; // 系统 TTS 探测为不可用后记住，避免每次都等待看门狗
+  function nativeSpeak(text, rate, onFail) {
     try {
       try { window.speechSynthesis.cancel(); } catch (e) {}
       var u = new SpeechSynthesisUtterance(String(text || ''));
@@ -250,22 +297,41 @@
       if (v) { try { u.voice = v; if (v.lang) u.lang = v.lang; } catch (e) {} }
       u.rate = rate || S.cfg.rate || 1;
       u.volume = 1;
-      // pitch 在部分平台 (Safari 桌面 / 一些 Android) 不支持或行为怪异, 失败就放弃, 不报错
       try { u.pitch = 1.2; } catch (e) {}
       var bigs = document.querySelectorAll('.word-big');
-      u.onstart = function () { for (var i = 0; i < bigs.length; i++) bigs[i].classList.add('speaking'); };
+      var started = false;
+      u.onstart = function () { started = true; for (var i = 0; i < bigs.length; i++) bigs[i].classList.add('speaking'); };
       var done = function () {
         for (var i = 0; i < bigs.length; i++) bigs[i].classList.remove('speaking');
       };
-      u.onend = done; u.onerror = done;
-      try {
-        window.speechSynthesis.speak(u);
-      } catch (e) {}
-      // 兜底: 某些浏览器 (老 Safari) speak 后没触发 onend, 5 秒后强制清状态
+      u.onend = function () { done(); clearTimeout(wd); };
+      u.onerror = function () { done(); clearTimeout(wd); };
+      // 看门狗：系统 TTS 存在但不发声（华为平板常见）→ 回退离线语音包
+      var wd = setTimeout(function () {
+        try { window.speechSynthesis.cancel(); } catch (e) {}
+        if (!started) { nativeDead = true; if (onFail) onFail(); }
+      }, 1300);
+      try { window.speechSynthesis.speak(u); } catch (e) {}
       setTimeout(done, 5000);
     } catch (e) {}
   }
+  function speak(text, rate) {
+    if (!S.cfg.sound) return;
+    var txt = String(text || '');
+    var engine = S.cfg.voiceEngine || 'auto';
+    if (engine === 'offline') { playSprite(txt, rate); return; }
+    if (engine === 'system') { nativeSpeak(txt, rate); return; }
+    // auto
+    if (!ttsSupported()) {
+      if (!playSprite(txt, rate)) toast('This device can\'t read aloud — try Chrome or Safari');
+      return;
+    }
+    if (nativeDead) { if (!playSprite(txt, rate)) nativeSpeak(txt, rate); return; }
+    nativeSpeak(txt, rate, function () { playSprite(txt, rate); });
+  }
   bindVoices();
+  // 离线优先模式 / 无系统 TTS 时，提前拉取语音包，缩短首次点击延迟
+  if ((S.cfg.voiceEngine === 'offline') || (S.cfg.voiceEngine === 'auto' && !ttsSupported())) loadSprite();
 
   /* 音效（WebAudio，无需素材） */
   var AC = null;
@@ -1482,6 +1548,12 @@
       '<div class="card"><div class="sec-title" style="margin-top:0"><span class="em">🔊</span>Pronunciation</div>' +
         '<div class="set-row" style="display:block"><div class="sl" style="margin-bottom:8px"><b>Voice</b><span>Auto-picks a sweet American female voice</span></div>' +
         '<select class="inp" id="voiceSel">' + (voiceOpts || '<option>No voice available</option>') + '</select></div>' +
+        '<div class="set-row"><div class="sl"><b>语音引擎</b><span>自动会优先系统语音，无系统语音（如华为平板）自动改用离线语音包</span></div>' +
+        '<div class="seg" id="engineSeg">' +
+          '<button class="' + ((c.voiceEngine || 'auto') === 'auto' ? 'on' : '') + '" data-act="setEngine" data-v="auto">自动</button>' +
+          '<button class="' + (c.voiceEngine === 'system' ? 'on' : '') + '" data-act="setEngine" data-v="system">系统语音</button>' +
+          '<button class="' + (c.voiceEngine === 'offline' ? 'on' : '') + '" data-act="setEngine" data-v="offline">离线语音包</button>' +
+        '</div></div>' +
         '<div class="set-row"><div class="sl"><b>Speed</b><span>Slower is friendlier for kids</span></div>' +
         '<input type="range" id="rateRange" min="0.5" max="1.1" step="0.05" value="' + c.rate + '"></div>' +
         '<div class="btn-row" style="margin-top:12px"><button class="btn sm soft" data-act="testVoice">Try "cake"</button>' +
@@ -1621,6 +1693,14 @@
     }
     if (a === 'mode') { S.cfg.mode = t.getAttribute('data-v'); write(K.cfg, S.cfg); renderSet(); return; }
     if (a === 'setAlpha') { S.cfg.alpha = t.getAttribute('data-v') === '1'; write(K.cfg, S.cfg); applyUI(); renderSet(); return; }
+    if (a === 'setEngine') {
+      S.cfg.voiceEngine = t.getAttribute('data-v') || 'auto'; write(K.cfg, S.cfg);
+      nativeDead = false;
+      if (S.cfg.voiceEngine === 'offline') { loadSprite(); toast('离线语音包加载中…'); }
+      else if (S.cfg.voiceEngine === 'auto' && !ttsSupported()) { loadSprite(); }
+      renderSet();
+      return;
+    }
     if (a === 'setSpellMode') {
       S.cfg.spellMode = t.getAttribute('data-v') || 'auto';
       write(K.cfg, S.cfg);
