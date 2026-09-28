@@ -1,5 +1,5 @@
 /* 宝贝背单词小助手 — Service Worker（网络优先，离线可用） */
-const CACHE = 'pw-v16';
+const CACHE = 'pw-v17';
 const ASSETS = [
   './',
   './index.html',
@@ -8,6 +8,8 @@ const ASSETS = [
   './js/data-l23.js',
   './js/data-l45.js',
   './js/data.js',
+  './js/audio/audio-index.js',
+  './js/audio/audio-sprite.m4a',
   './js/app.js',
   './icons/icon-192.png',
   './icons/icon-512.png'
