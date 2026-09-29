@@ -242,14 +242,15 @@
   var SPRITE = {
     ctx: null,
     buf: null,
+    el: null,
     map: (window.AUDIO && window.AUDIO.map) || {},
-    url: (window.AUDIO && window.AUDIO.url) || 'js/audio-sprite.m4a',
+    url: (window.AUDIO && window.AUDIO.url) || 'js/audio/audio-sprite.m4a',
     loading: false, loaded: false, failed: false
   };
   function spriteCtx() {
     try {
       if (!SPRITE.ctx) SPRITE.ctx = new (window.AudioContext || window.webkitAudioContext)();
-      if (SPRITE.ctx.state === 'suspended') SPRITE.ctx.resume();
+      if (SPRITE.ctx.state === 'suspended') { try { SPRITE.ctx.resume(); } catch (e) {} }
       return SPRITE.ctx;
     } catch (e) { return null; }
   }
@@ -258,7 +259,10 @@
     if (SPRITE.loading) return;
     SPRITE.loading = true;
     try {
-      fetch(SPRITE.url).then(function (r) { return r.arrayBuffer(); }).then(function (ab) {
+      fetch(SPRITE.url).then(function (r) {
+        if (!r || !r.ok) throw new Error('sprite 404');
+        return r.arrayBuffer();
+      }).then(function (ab) {
         var ctx = spriteCtx();
         if (!ctx) { SPRITE.failed = true; SPRITE.loading = false; if (cb) cb(false); return; }
         ctx.decodeAudioData(ab, function (buf) {
@@ -267,23 +271,50 @@
       }).catch(function () { SPRITE.failed = true; SPRITE.loading = false; if (cb) cb(false); });
     } catch (e) { SPRITE.failed = true; SPRITE.loading = false; if (cb) cb(false); }
   }
-  // 返回 true 表示已安排播放（无论是否命中离线音频）
+  function audioEl() {
+    if (!SPRITE.el) { SPRITE.el = new Audio(); SPRITE.el.preload = 'auto'; SPRITE.el.src = SPRITE.url; }
+    return SPRITE.el;
+  }
+  // 兜底：WebAudio 解码失败时，用 <audio> 元素（走系统媒体管线，华为更稳）
+  function playAudioEl(key, rate) {
+    var seg = SPRITE.map[key]; if (!seg) return false;
+    var a = audioEl();
+    try {
+      a.playbackRate = rate || S.cfg.rate || 1;
+      var stopAt = seg[1];
+      var onTime = function () { if (a.currentTime >= stopAt - 0.02) { a.pause(); a.removeEventListener('timeupdate', onTime); } };
+      a.removeEventListener('timeupdate', onTime);
+      a.addEventListener('timeupdate', onTime);
+      a.currentTime = seg[0];
+      var p = a.play();
+      if (p && p.catch) p.catch(function () {});
+      return true;
+    } catch (e) { return false; }
+  }
+  // 返回 true 表示已安排播放
   function playSprite(text, rate) {
     if (!S.cfg.sound) return false;
     var key = String(text || '').trim().toLowerCase();
     var seg = SPRITE.map[key];
     if (!seg) return false; // 该词无离线音频
-    loadSprite(function (ok) {
-      if (!ok || !SPRITE.buf) return;
-      var ctx = spriteCtx(); if (!ctx) return;
-      try {
-        var src = ctx.createBufferSource();
-        src.buffer = SPRITE.buf;
-        src.connect(ctx.destination);
-        src.playbackRate.value = rate || S.cfg.rate || 1;
-        src.start(0, seg[0], seg[1] - seg[0]);
-      } catch (e) {}
-    });
+    spriteCtx(); // 在用户点击的同一手势里创建/恢复 AudioContext，避免华为端被挂起
+    function fire() {
+      var ctx = spriteCtx();
+      if (ctx && SPRITE.buf) {
+        try {
+          var src = ctx.createBufferSource();
+          src.buffer = SPRITE.buf;
+          src.connect(ctx.destination);
+          src.playbackRate.value = rate || S.cfg.rate || 1;
+          src.start(0, seg[0], Math.max(0.05, seg[1] - seg[0]));
+          return true;
+        } catch (e) {}
+      }
+      return playAudioEl(key, rate); // 解码失败则退回 <audio>
+    }
+    if (SPRITE.loaded) return fire();
+    if (SPRITE.failed) return playAudioEl(key, rate);
+    loadSprite(function () { fire(); });
     return true;
   }
 
@@ -332,6 +363,14 @@
   bindVoices();
   // 离线优先模式 / 无系统 TTS 时，提前拉取语音包，缩短首次点击延迟
   if ((S.cfg.voiceEngine === 'offline') || (S.cfg.voiceEngine === 'auto' && !ttsSupported())) loadSprite();
+  // 首次用户手势里解锁 AudioContext（华为等设备的 WebView 会挂起音频，导致静音）
+  function unlockAudio() {
+    var c = spriteCtx(); if (c && c.state === 'suspended') { try { c.resume(); } catch (e) {} }
+    if (AC && AC.state === 'suspended') { try { AC.resume(); } catch (e) {} }
+  }
+  ['pointerdown', 'touchstart', 'mousedown', 'keydown'].forEach(function (ev) {
+    window.addEventListener(ev, unlockAudio, { passive: true });
+  });
 
   /* 音效（WebAudio，无需素材） */
   var AC = null;
